@@ -46,7 +46,7 @@ impl MadaraEngine {
     fn parse_card(&self, card: ElementRef<'_>, page_url: &str) -> Option<Manga> {
         let is_anchor = card.value().name() == "a";
         let link_sel = Selector::parse(
-            "a[href*='/manga/'], a[href*='/series/'], a[href*='/serie/'], a[href*='/comics/'], a[href*='/comic/'], a[href*='/webtoon/'], a[href*='/webtoons/'], a[href*='/komik/'], a[href*='/titles/'], .post-title a, .entry-title a, .item-title a, h3 a, h4 a, h5 a, .thumb a, a",
+            "a[href*='/manga/'], a[href*='/series/'], a[href*='/serie/'], a[href*='/comics/'], a[href*='/comic/'], a[href*='/webtoon/'], a[href*='/webtoons/'], a[href*='/manhwa/'], a[href*='/manhua/'], a[href*='/komik/'], a[href*='/titles/'], a[href*='/project/'], .post-title a, .entry-title a, .item-title a, h3 a, h4 a, h5 a, .thumb a, a",
         ).ok()?;
         
         let anchor = if is_anchor && card.value().attr("href").is_some() {
@@ -62,6 +62,8 @@ impl MadaraEngine {
             || clean_path.ends_with("/series")
             || clean_path.ends_with("/webtoons")
             || clean_path.ends_with("/comics")
+            || clean_path.ends_with("/manhwa")
+            || clean_path.ends_with("/manhua")
             || clean_path.contains("/genre/")
             || clean_path.contains("/genres/")
             || clean_path.contains("/category/")
@@ -111,6 +113,8 @@ impl MadaraEngine {
                 list.push(format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/webtoons/page/{}/?m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/series/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/comics/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/manhwa/page/{}/?m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/page/{}/?s=&post_type=wp-manga&m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/page/{}/?m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/page/{}/", self.base_url, p));
@@ -118,58 +122,65 @@ impl MadaraEngine {
                 list.push(format!("{}/manga/?m_orderby={}", self.base_url, order));
                 list.push(format!("{}/webtoons/?m_orderby={}", self.base_url, order));
                 list.push(format!("{}/series/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/comics/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/manhwa/?m_orderby={}", self.base_url, order));
                 list.push(format!("{}/webtoons/", self.base_url));
                 list.push(format!("{}/webtoon/", self.base_url));
                 list.push(format!("{}/manga/", self.base_url));
                 list.push(format!("{}/series/", self.base_url));
+                list.push(format!("{}/comics/", self.base_url));
+                list.push(format!("{}/manhwa/", self.base_url));
                 list.push(format!("{}/?m_orderby={}", self.base_url, order));
                 list.push(format!("{}/", self.base_url));
             }
             list
         };
 
-        let mut html = String::new();
-        let mut active_url = self.base_url.clone();
+        let card_sel = Selector::parse(
+            "div.page-item-detail, .row.c-tabs-item__content, .manga__item, .manga-item, .item-summary, .bsx, .listupd .bs, .box, .page-listing-item, .item-thumb, .col-6, .col-md-2, .col-sm-3, .col-xs-4, article",
+        ).unwrap();
+        let direct_sel = Selector::parse(
+            "a[href*='/serie/'], a[href*='/series/'], a[href*='/manga/'], a[href*='/webtoon/'], a[href*='/comics/'], a[href*='/manhwa/']",
+        ).unwrap();
+
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
         let mut last_err = None;
+
         for u in candidates {
             match self.fetch_html(&u).await {
-                Ok(h) if h.len() > 200 => {
-                    html = h;
-                    active_url = u;
-                    break;
+                Ok(html) if html.len() > 200 => {
+                    let doc = Html::parse_document(&html);
+                    let mut found = Vec::new();
+                    for card in doc.select(&card_sel) {
+                        if let Some(m) = self.parse_card(card, &u) {
+                            if seen.insert(m.id.clone()) {
+                                found.push(m);
+                            }
+                        }
+                    }
+                    if found.is_empty() {
+                        for a in doc.select(&direct_sel) {
+                            if let Some(m) = self.parse_card(a, &u) {
+                                if seen.insert(m.id.clone()) {
+                                    found.push(m);
+                                }
+                            }
+                        }
+                    }
+                    if !found.is_empty() {
+                        items = found;
+                        break;
+                    }
                 }
                 Ok(_) => {}
                 Err(e) => last_err = Some(e),
             }
         }
-        if html.is_empty() {
-            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{} returned empty page", self.name)));
-        }
 
-        let doc = Html::parse_document(&html);
-        let card_sel = Selector::parse(
-            "div.page-item-detail, .row.c-tabs-item__content, .manga__item, .manga-item, .item-summary, .bsx, .listupd .bs, .box, .page-listing-item, .item-thumb, .col-6, .col-md-2, .col-sm-3, .col-xs-4, article",
-        ).unwrap();
-        let mut items = Vec::new();
-        let mut seen = HashSet::new();
-
-        for card in doc.select(&card_sel) {
-            if let Some(m) = self.parse_card(card, &active_url) {
-                if seen.insert(m.id.clone()) {
-                    items.push(m);
-                }
-            }
-        }
-
-        // Secondary fallback: if standard cards returned nothing, scan for any series anchor directly
         if items.is_empty() {
-            let direct_sel = Selector::parse("a[href*='/serie/'], a[href*='/series/'], a[href*='/manga/'], a[href*='/webtoon/']").unwrap();
-            for a in doc.select(&direct_sel) {
-                if let Some(m) = self.parse_card(a, &active_url) {
-                    if seen.insert(m.id.clone()) {
-                        items.push(m);
-                    }
-                }
+            if let Some(e) = last_err {
+                return Err(e);
             }
         }
 

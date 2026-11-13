@@ -37,9 +37,10 @@ impl Default for LiveSourceRegistry {
 impl LiveSourceRegistry {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(25))
-            .connect_timeout(Duration::from_secs(12))
+            .timeout(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(10))
             .cookie_store(true)
+            .danger_accept_invalid_certs(true)
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
             .build()
             .unwrap_or_default();

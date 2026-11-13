@@ -44,82 +44,103 @@ impl MangaThemesiaEngine {
     }
 
     async fn fetch_candidates(&self, candidates: &[String]) -> anyhow::Result<MangaPageResult> {
-        let mut html = String::new();
-        let mut active_url = self.base_url.clone();
-        let mut last_err = None;
-
-        for u in candidates {
-            match self.fetch_html(u).await {
-                Ok(h) if h.len() > 200 => {
-                    html = h;
-                    active_url = u.clone();
-                    break;
-                }
-                Ok(_) => {}
-                Err(e) => last_err = Some(e),
-            }
-        }
-
-        if html.is_empty() {
-            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{} returned empty page", self.name)));
-        }
-
-        let doc = Html::parse_document(&html);
         let card_sel = Selector::parse(
             ".bs .bsx, .listupd .bsx, .utao .uta, article.bs, .animposx, .box, .page-item-detail, .manga-item, .col-6, article",
         ).unwrap();
         let link_sel = Selector::parse("a[href]").unwrap();
         let title_sel = Selector::parse(".tt, .entry-title, h3, h4, h5").unwrap();
         let img_sel = Selector::parse("img").unwrap();
+        let direct_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comics/'], a[href*='/comic/'], a[href*='/komik/'], a[href*='/manhwa/']").unwrap();
 
         let mut items = Vec::new();
         let mut seen = HashSet::new();
+        let mut last_err = None;
 
-        for card in doc.select(&card_sel) {
-            let is_anchor = card.value().name() == "a";
-            let anchor_opt = if is_anchor && card.value().attr("href").is_some() {
-                Some(card)
-            } else {
-                card.select(&link_sel).next()
-            };
-            let Some(a) = anchor_opt else { continue };
-            let Some(href) = a.value().attr("href") else { continue };
-            let Some(full_url) = resolve_url(&active_url, href) else { continue };
-            let clean = full_url.trim_end_matches('/');
-            if clean == self.base_url || !seen.insert(full_url.clone()) {
-                continue;
+        for u in candidates {
+            match self.fetch_html(u).await {
+                Ok(html) if html.len() > 200 => {
+                    let doc = Html::parse_document(&html);
+                    let mut found = Vec::new();
+
+                    for card in doc.select(&card_sel) {
+                        let is_anchor = card.value().name() == "a";
+                        let anchor_opt = if is_anchor && card.value().attr("href").is_some() {
+                            Some(card)
+                        } else {
+                            card.select(&link_sel).next()
+                        };
+                        let Some(a) = anchor_opt else { continue };
+                        let Some(href) = a.value().attr("href") else { continue };
+                        let Some(full_url) = resolve_url(u, href) else { continue };
+                        let clean = full_url.trim_end_matches('/');
+                        if clean == self.base_url || !seen.insert(full_url.clone()) {
+                            continue;
+                        }
+                        let title = card
+                            .select(&title_sel)
+                            .next()
+                            .map(|e| e.text().collect::<String>().trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .or_else(|| a.value().attr("title").map(|s| s.trim().to_string()))
+                            .unwrap_or_else(|| "Manhwa".to_string());
+                        let clean_title = if let Some(stripped) = title.strip_prefix(|c: char| c.is_ascii_digit()) {
+                            let remainder = stripped.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c.is_whitespace());
+                            if !remainder.is_empty() { remainder.to_string() } else { title }
+                        } else {
+                            title
+                        };
+                        let cover = card.select(&img_sel).next().and_then(|i| extract_best_image_url(i, u));
+                        let mut m = Manga::new(full_url, clean_title, &self.id);
+                        m.cover_url = cover;
+                        m.is_manhwa = true;
+                        m.enrich_manhwa_tags();
+                        found.push(m);
+                    }
+
+                    if found.is_empty() {
+                        for a in doc.select(&direct_sel) {
+                            let Some(href) = a.value().attr("href") else { continue };
+                            let Some(full_url) = resolve_url(u, href) else { continue };
+                            let clean = full_url.trim_end_matches('/');
+                            if clean == self.base_url || clean.ends_with("/series") || clean.ends_with("/comics") || clean.ends_with("/manga") || !seen.insert(full_url.clone()) {
+                                continue;
+                            }
+                            let title = a.value().attr("title")
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .or_else(|| {
+                                    let t = a.text().collect::<String>().trim().to_string();
+                                    if t.is_empty() { None } else { Some(t) }
+                                })
+                                .unwrap_or_else(|| "Manhwa".to_string());
+                            let clean_title = if let Some(stripped) = title.strip_prefix(|c: char| c.is_ascii_digit()) {
+                                let remainder = stripped.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c.is_whitespace());
+                                if !remainder.is_empty() { remainder.to_string() } else { title }
+                            } else {
+                                title
+                            };
+                            let cover = a.select(&img_sel).next().and_then(|i| extract_best_image_url(i, u));
+                            let mut m = Manga::new(full_url, clean_title, &self.id);
+                            m.cover_url = cover;
+                            m.is_manhwa = true;
+                            m.enrich_manhwa_tags();
+                            found.push(m);
+                        }
+                    }
+
+                    if !found.is_empty() {
+                        items = found;
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => last_err = Some(e),
             }
-            let title = card
-                .select(&title_sel)
-                .next()
-                .map(|e| e.text().collect::<String>().trim().to_string())
-                .filter(|s| !s.is_empty())
-                .or_else(|| a.value().attr("title").map(|s| s.trim().to_string()))
-                .unwrap_or_else(|| "Manhwa".to_string());
-            let cover = card.select(&img_sel).next().and_then(|i| extract_best_image_url(i, &active_url));
-            let mut m = Manga::new(full_url, title, &self.id);
-            m.cover_url = cover;
-            m.is_manhwa = true;
-            m.enrich_manhwa_tags();
-            items.push(m);
         }
 
         if items.is_empty() {
-            let direct_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/komik/']").unwrap();
-            for a in doc.select(&direct_sel) {
-                let Some(href) = a.value().attr("href") else { continue };
-                let Some(full_url) = resolve_url(&active_url, href) else { continue };
-                if full_url.trim_end_matches('/') == self.base_url || !seen.insert(full_url.clone()) {
-                    continue;
-                }
-                let title = a.value().attr("title")
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| a.text().collect::<String>().trim().to_string());
-                if title.is_empty() { continue; }
-                let mut m = Manga::new(full_url, title, &self.id);
-                m.is_manhwa = true;
-                items.push(m);
+            if let Some(e) = last_err {
+                return Err(e);
             }
         }
 
@@ -143,16 +164,20 @@ impl Source for MangaThemesiaEngine {
         let p = page.max(1);
         let candidates = if p <= 1 {
             vec![
+                format!("{}/comics/?order=popular", self.base_url),
                 format!("{}/manga/?order=popular", self.base_url),
                 format!("{}/manga/?page=1&order=popular", self.base_url),
                 format!("{}/series/?order=popular", self.base_url),
                 format!("{}/komik/?order=popular", self.base_url),
+                format!("{}/comics/", self.base_url),
+                format!("{}/browse/comics", self.base_url),
                 format!("{}/manga/", self.base_url),
                 format!("{}/series/", self.base_url),
                 format!("{}/", self.base_url),
             ]
         } else {
             vec![
+                format!("{}/comics/?page={}&order=popular", self.base_url, p),
                 format!("{}/manga/?page={}&order=popular", self.base_url, p),
                 format!("{}/manga/page/{}/?order=popular", self.base_url, p),
                 format!("{}/series/?page={}&order=popular", self.base_url, p),
@@ -166,14 +191,17 @@ impl Source for MangaThemesiaEngine {
         let p = page.max(1);
         let candidates = if p <= 1 {
             vec![
+                format!("{}/comics/?order=update", self.base_url),
                 format!("{}/manga/?order=update", self.base_url),
                 format!("{}/manga/?page=1&order=update", self.base_url),
                 format!("{}/series/?order=update", self.base_url),
+                format!("{}/comics/", self.base_url),
                 format!("{}/manga/", self.base_url),
                 format!("{}/", self.base_url),
             ]
         } else {
             vec![
+                format!("{}/comics/?page={}&order=update", self.base_url, p),
                 format!("{}/manga/?page={}&order=update", self.base_url, p),
                 format!("{}/series/?page={}&order=update", self.base_url, p),
                 format!("{}/page/{}/", self.base_url, p),
@@ -188,6 +216,7 @@ impl Source for MangaThemesiaEngine {
         let candidates = vec![
             format!("{}/page/{}/?s={}", self.base_url, p, enc),
             format!("{}/?s={}", self.base_url, enc),
+            format!("{}/comics/?s={}", self.base_url, enc),
             format!("{}/manga/?s={}", self.base_url, enc),
         ];
         self.fetch_candidates(&candidates).await

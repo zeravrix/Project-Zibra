@@ -243,6 +243,13 @@ pub async fn fetch_html_resilient(
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
+        .header("Sec-Ch-Ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+        .header("Sec-Ch-Ua-Mobile", "?0")
+        .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+        .header("Sec-Fetch-Dest", "document")
+        .header("Sec-Fetch-Mode", "navigate")
+        .header("Sec-Fetch-Site", "none")
+        .header("Sec-Fetch-User", "?1")
         .header("Upgrade-Insecure-Requests", "1");
     if let Some(r) = referer {
         req = req.header("Referer", r);
@@ -251,20 +258,21 @@ pub async fn fetch_html_resilient(
         Ok(resp) => {
             let status = resp.status();
             if status.is_success() {
-                return Ok(resp.text().await?);
+                let text = resp.text().await?;
+                if text.len() > 100 {
+                    return Ok(text);
+                }
             }
-            if status.as_u16() == 403 || status.as_u16() == 503 {
-                if let Ok(body) = fetch_via_curl(url, referer).await {
-                    if !body.is_empty() {
-                        return Ok(body);
-                    }
+            if let Ok(body) = fetch_via_curl(url, referer).await {
+                if body.len() > 100 {
+                    return Ok(body);
                 }
             }
             anyhow::bail!("HTTP {}", status);
         }
         Err(e) => {
             if let Ok(body) = fetch_via_curl(url, referer).await {
-                if !body.is_empty() {
+                if body.len() > 100 {
                     return Ok(body);
                 }
             }
@@ -276,8 +284,9 @@ pub async fn fetch_html_resilient(
 async fn fetch_via_curl(url: &str, referer: Option<&str>) -> anyhow::Result<String> {
     let mut cmd = tokio::process::Command::new("curl");
     cmd.arg("-s")
+        .arg("-k")
         .arg("-L")
-        .arg("--fail")
+        .arg("--compressed")
         .arg("--max-time")
         .arg("15")
         .arg("-A")
@@ -285,7 +294,21 @@ async fn fetch_via_curl(url: &str, referer: Option<&str>) -> anyhow::Result<Stri
         .arg("-H")
         .arg("Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         .arg("-H")
-        .arg("Accept-Language: en-US,en;q=0.9,ar;q=0.8");
+        .arg("Accept-Language: en-US,en;q=0.9,ar;q=0.8")
+        .arg("-H")
+        .arg("Sec-Ch-Ua: \"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+        .arg("-H")
+        .arg("Sec-Ch-Ua-Mobile: ?0")
+        .arg("-H")
+        .arg("Sec-Ch-Ua-Platform: \"Windows\"")
+        .arg("-H")
+        .arg("Sec-Fetch-Dest: document")
+        .arg("-H")
+        .arg("Sec-Fetch-Mode: navigate")
+        .arg("-H")
+        .arg("Sec-Fetch-Site: none")
+        .arg("-H")
+        .arg("Sec-Fetch-User: ?1");
     if let Some(r) = referer {
         cmd.arg("-H").arg(format!("Referer: {}", r));
     }

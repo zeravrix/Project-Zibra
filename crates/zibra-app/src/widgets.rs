@@ -1,13 +1,20 @@
 use crate::theme::GlassTokens;
 use eframe::egui::{
     self, Align2, Color32, ColorImage, FontId, Pos2, Rect, RichText, Rounding, Sense, Stroke,
-    TextureHandle, TextureOptions, Vec2,
+    TextureFilter, TextureHandle, TextureOptions, TextureWrapMode, Vec2,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use zibra_core::{Manga, ReadingProgress};
 use zibra_reader::{CoverImageCache, CoverStatus};
+
+pub const HIGH_QUALITY_TEXTURE: TextureOptions = TextureOptions {
+    magnification: TextureFilter::Linear,
+    minification: TextureFilter::Linear,
+    wrap_mode: TextureWrapMode::ClampToEdge,
+    mipmap_mode: Some(TextureFilter::Linear),
+};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -333,7 +340,7 @@ pub fn draw_remote_image(
                 let handle = ctx.load_texture(
                     format!("cov_{}", u),
                     color_img,
-                    TextureOptions::LINEAR,
+                    HIGH_QUALITY_TEXTURE,
                 );
                 painter.image(
                     handle.id(),
@@ -352,7 +359,7 @@ pub fn draw_remote_image(
                 let cache_clone = cover_cache.clone();
                 let u_str = u.to_string();
                 let egui_ctx = ctx.clone();
-                let max_dim = (size.x.max(size.y) * 2.5).clamp(400.0, 1080.0) as u32;
+                let max_dim = (size.x.max(size.y) * 3.0).clamp(600.0, 1920.0) as u32;
                 rt.spawn(async move {
                     let _ = cache_clone.fetch_and_decode(&u_str, max_dim).await;
                     egui_ctx.request_repaint();
@@ -572,21 +579,22 @@ pub fn manga_cover_card(
         );
     }
 
-    // Bottom-right Circular Progress Badge (matching ZERAVRIX ProgressBadge)
+    // Sleek minimal progress bar along the bottom of the cover (no numbers or bulky circles)
     if let Some(pct) = progress_percent.filter(|&p| p > 0) {
-        let badge_center = Pos2::new(cover_rect.max.x - 20.0, cover_rect.max.y - 20.0);
-        painter.circle_filled(badge_center, 15.0, tokens.primary);
-        let label = if pct >= 100 {
-            "✓".to_string()
-        } else {
-            format!("{}%", pct)
-        };
-        painter.text(
-            badge_center,
-            Align2::CENTER_CENTER,
-            label,
-            FontId::proportional(9.5),
-            tokens.on_primary,
+        let bar_w = (card_w * (pct as f32 / 100.0).clamp(0.0, 1.0)).max(6.0);
+        let bar_rect = Rect::from_min_size(
+            Pos2::new(cover_rect.min.x, cover_rect.max.y - 3.5),
+            Vec2::new(bar_w, 3.5),
+        );
+        painter.rect_filled(
+            bar_rect,
+            Rounding {
+                nw: 0.0,
+                ne: 2.0,
+                sw: 12.0,
+                se: if pct >= 96 { 12.0 } else { 0.0 },
+            },
+            tokens.primary,
         );
     }
 

@@ -30,3 +30,13 @@ async fn test_toonily_catalog_fetch() {
         assert!(!page.items.is_empty(), "Toonily must return items when online");
     }
 }
+
+#[tokio::test]
+async fn test_asura_catalog_fetch() {
+    let registry = LiveSourceRegistry::new();
+    let asura = registry.get("ASURASCANS").expect("ASURASCANS must exist in registry");
+    if let Ok(page) = asura.popular(1).await {
+        println!("ASURA returned {} titles! Sample title: {}", page.items.len(), page.items.first().map(|m| m.title.as_str()).unwrap_or("None"));
+        assert!(!page.items.is_empty(), "Asura Scans must return items when online");
+    }
+}

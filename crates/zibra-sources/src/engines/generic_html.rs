@@ -148,6 +148,7 @@ impl GenericHtmlEngine {
                 format!("{}/?s={}&page={}", self.base_url, enc, p),
                 format!("{}/search?q={}&page={}", self.base_url, enc, p),
                 format!("{}/search?keyword={}&page={}", self.base_url, enc, p),
+                format!("{}/search/story/{}", self.base_url, enc),
             ]
         } else if latest {
             vec![
@@ -157,6 +158,8 @@ impl GenericHtmlEngine {
                     format!("{}/manga/?page={}&order=update", self.base_url, p)
                 },
                 format!("{}/manga/page/{}/?m_orderby=latest", self.base_url, p),
+                format!("{}/comics/", self.base_url),
+                format!("{}/manga/", self.base_url),
                 if p <= 1 {
                     self.base_url.clone()
                 } else {
@@ -171,6 +174,9 @@ impl GenericHtmlEngine {
                     format!("{}/manga/?page={}&order=popular", self.base_url, p)
                 },
                 format!("{}/manga/page/{}/?m_orderby=views", self.base_url, p),
+                format!("{}/comics/", self.base_url),
+                format!("{}/manga/", self.base_url),
+                format!("{}/series/", self.base_url),
                 if p <= 1 {
                     self.base_url.clone()
                 } else {
@@ -179,48 +185,53 @@ impl GenericHtmlEngine {
             ]
         };
 
-        let mut html = String::new();
-        let mut active_url = self.base_url.clone();
+        let card_sel = Selector::parse(
+            ".page-item-detail, .manga-item, .item-summary, .row.c-tabs-item__content, .bs .bsx, .listupd .bsx, .utao .uta, article, .manga-card, .box, .content-genres-item, .story_item, .truyen-list .list-truyen-item-wrap, .comics-grid .comic-card",
+        )
+        .unwrap();
+        let link_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comic/'], a[href*='/comics/'], a[href*='/webtoon/'], a[href*='/manhwa/']").unwrap();
+
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
         let mut last_err = None;
+
         for u in candidates {
             match self.fetch_html(&u).await {
-                Ok(h) if h.len() > 200 => {
-                    html = h;
-                    active_url = u;
-                    break;
+                Ok(html) if html.len() > 200 => {
+                    let doc = Html::parse_document(&html);
+                    let mut found = Vec::new();
+
+                    for card in doc.select(&card_sel) {
+                        if let Some(m) = self.parse_generic_card(card, &u) {
+                            if seen.insert(m.id.clone()) {
+                                found.push(m);
+                            }
+                        }
+                    }
+
+                    if found.is_empty() {
+                        for link in doc.select(&link_sel) {
+                            if let Some(m) = self.parse_generic_card(link, &u) {
+                                if seen.insert(m.id.clone()) {
+                                    found.push(m);
+                                }
+                            }
+                        }
+                    }
+
+                    if !found.is_empty() {
+                        items = found;
+                        break;
+                    }
                 }
                 Ok(_) => {}
                 Err(e) => last_err = Some(e),
             }
         }
-        if html.is_empty() {
-            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Unable to load {}", self.name)));
-        }
-
-        let doc = Html::parse_document(&html);
-        let card_sel = Selector::parse(
-            ".page-item-detail, .manga-item, .item-summary, .row.c-tabs-item__content, .bs .bsx, .listupd .bsx, .utao .uta, article, .manga-card, .box, .content-genres-item, .story_item, .truyen-list .list-truyen-item-wrap",
-        )
-        .unwrap();
-
-        let mut items = Vec::new();
-        let mut seen = HashSet::new();
-        for card in doc.select(&card_sel) {
-            if let Some(m) = self.parse_generic_card(card, &active_url) {
-                if seen.insert(m.id.clone()) {
-                    items.push(m);
-                }
-            }
-        }
 
         if items.is_empty() {
-            let link_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comic/'], a[href*='/webtoon/']").unwrap();
-            for link in doc.select(&link_sel) {
-                if let Some(m) = self.parse_generic_card(link, &active_url) {
-                    if seen.insert(m.id.clone()) {
-                        items.push(m);
-                    }
-                }
+            if let Some(e) = last_err {
+                return Err(e);
             }
         }
 

@@ -8,11 +8,11 @@ use crate::spring::SpringDamper;
 use crate::theme::{apply_kotatsu_visuals, GlassTokens};
 use crate::widgets::{
     draw_remote_image, floating_continue_button, manga_cover_card, paint_native_icon, truncate_str,
-    z_chip, z_icon_button, z_search_bar, CardAction, NativeIcon,
+    z_chip, z_icon_button, z_search_bar, CardAction, NativeIcon, HIGH_QUALITY_TEXTURE,
 };
 use eframe::egui::{
     self, Align, Align2, Color32, ColorImage, FontId, Layout, Margin, Pos2, Rect, RichText,
-    Rounding, ScrollArea, Sense, Stroke, TextureHandle, TextureOptions, Vec2,
+    Rounding, ScrollArea, Sense, Stroke, TextureHandle, Vec2,
 };
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
@@ -389,7 +389,7 @@ impl ZibraApp {
             self.logo_texture = Some(ctx.load_texture(
                 "zibra_app_logo",
                 color_img,
-                TextureOptions::LINEAR,
+                HIGH_QUALITY_TEXTURE,
             ));
         }
     }
@@ -432,7 +432,7 @@ impl ZibraApp {
                     }
 
                     let color_img = ColorImage::from_rgba_unmultiplied([w, h], &raw);
-                    let tex = ctx.load_texture("zibrax_custom_bg", color_img, TextureOptions::LINEAR);
+                    let tex = ctx.load_texture("zibrax_custom_bg", color_img, HIGH_QUALITY_TEXTURE);
                     self.bg_texture = Some((path_str.clone(), tex));
                 }
             }
@@ -2553,7 +2553,13 @@ impl ZibraApp {
                     self.active_reader_chapter = None;
                 }
             }
-            if i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::H) {
+            if i.key_pressed(egui::Key::Tab) {
+                self.reader_show_settings_popup = !self.reader_show_settings_popup;
+                if self.reader_show_settings_popup {
+                    self.reader_show_hud = true;
+                }
+            }
+            if i.key_pressed(egui::Key::H) {
                 self.reader_show_hud = !self.reader_show_hud;
             }
             if i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals) {
@@ -4714,7 +4720,7 @@ fn sliced_to_textures_adjusted(
             ctx.load_texture(
                 format!("{}_tile_{}", url, tile.tile_index),
                 color_img,
-                TextureOptions::LINEAR,
+                HIGH_QUALITY_TEXTURE,
             )
         })
         .collect()

@@ -466,7 +466,7 @@ impl CoverImageCache {
         let _permit = self.fetch_semaphore.acquire().await?;
         let raw_bytes = self.fetch_cover_bytes(url).await?;
         let url_key = url.to_string();
-        let target_max = max_dim.clamp(120, 1200);
+        let target_max = max_dim.clamp(400, 2048);
 
         let decoded = tokio::task::spawn_blocking(move || -> anyhow::Result<DecodedCover> {
             let img = image::load_from_memory(&raw_bytes)?;
