@@ -9,6 +9,194 @@ use tokio::runtime::Runtime;
 use zibra_core::{Manga, ReadingProgress};
 use zibra_reader::{CoverImageCache, CoverStatus};
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeIcon {
+    History,
+    Favorites,
+    Explore,
+    Feed,
+    Downloads,
+    Settings,
+    Fullscreen,
+    Amoled,
+    Back,
+    Close,
+    Search,
+    ZoomIn,
+    ZoomOut,
+    Refresh,
+}
+
+pub fn paint_native_icon(
+    painter: &egui::Painter,
+    rect: Rect,
+    icon: NativeIcon,
+    color: Color32,
+    stroke_w: f32,
+) {
+    let center = rect.center();
+    let r = (rect.width().min(rect.height()) * 0.38).clamp(3.0, 18.0);
+    let stroke = Stroke::new(stroke_w, color);
+
+    match icon {
+        NativeIcon::History => {
+            painter.circle_stroke(center, r, stroke);
+            painter.line_segment([center, center + Vec2::new(0.0, -r * 0.55)], stroke);
+            painter.line_segment([center, center + Vec2::new(r * 0.45, 0.0)], stroke);
+        }
+        NativeIcon::Favorites => {
+            let left_c = center + Vec2::new(-r * 0.35, -r * 0.25);
+            let right_c = center + Vec2::new(r * 0.35, -r * 0.25);
+            let sub_r = r * 0.42;
+            painter.circle_stroke(left_c, sub_r, stroke);
+            painter.circle_stroke(right_c, sub_r, stroke);
+            let bottom = center + Vec2::new(0.0, r * 0.75);
+            painter.line_segment([left_c + Vec2::new(-sub_r * 0.85, sub_r * 0.5), bottom], stroke);
+            painter.line_segment([right_c + Vec2::new(sub_r * 0.85, sub_r * 0.5), bottom], stroke);
+        }
+        NativeIcon::Explore => {
+            painter.circle_stroke(center, r, stroke);
+            let tip_n = center + Vec2::new(0.0, -r * 0.65);
+            let tip_s = center + Vec2::new(0.0, r * 0.65);
+            let tip_e = center + Vec2::new(r * 0.28, 0.0);
+            let tip_w = center + Vec2::new(-r * 0.28, 0.0);
+            painter.line_segment([tip_w, tip_n], stroke);
+            painter.line_segment([tip_n, tip_e], stroke);
+            painter.line_segment([tip_e, tip_s], stroke);
+            painter.line_segment([tip_s, tip_w], stroke);
+        }
+        NativeIcon::Feed => {
+            painter.circle_filled(center + Vec2::new(0.0, r * 0.45), 2.2, color);
+            let arc_stroke = Stroke::new(stroke_w * 0.9, color);
+            painter.line_segment([center + Vec2::new(-r * 0.4, -r * 0.05), center + Vec2::new(r * 0.4, -r * 0.05)], arc_stroke);
+            painter.line_segment([center + Vec2::new(-r * 0.75, -r * 0.45), center + Vec2::new(r * 0.75, -r * 0.45)], arc_stroke);
+        }
+        NativeIcon::Downloads => {
+            let tray_y = center.y + r * 0.65;
+            let tray_w = r * 0.75;
+            painter.line_segment([Pos2::new(center.x - tray_w, tray_y), Pos2::new(center.x + tray_w, tray_y)], stroke);
+            let arrow_tip = center + Vec2::new(0.0, r * 0.35);
+            painter.line_segment([center + Vec2::new(0.0, -r * 0.65), arrow_tip], stroke);
+            painter.line_segment([Pos2::new(center.x - r * 0.35, arrow_tip.y - r * 0.35), arrow_tip], stroke);
+            painter.line_segment([Pos2::new(center.x + r * 0.35, arrow_tip.y - r * 0.35), arrow_tip], stroke);
+        }
+        NativeIcon::Settings => {
+            painter.circle_stroke(center, r * 0.45, stroke);
+            for i in 0..6 {
+                let angle = (i as f32) * std::f32::consts::PI / 3.0;
+                let dir = Vec2::new(angle.cos(), angle.sin());
+                painter.line_segment([center + dir * (r * 0.45), center + dir * (r * 0.85)], stroke);
+            }
+        }
+        NativeIcon::Fullscreen => {
+            let d = r * 0.75;
+            let arm = r * 0.38;
+            let tl = center + Vec2::new(-d, -d);
+            painter.line_segment([tl, tl + Vec2::new(arm, 0.0)], stroke);
+            painter.line_segment([tl, tl + Vec2::new(0.0, arm)], stroke);
+            let tr = center + Vec2::new(d, -d);
+            painter.line_segment([tr, tr + Vec2::new(-arm, 0.0)], stroke);
+            painter.line_segment([tr, tr + Vec2::new(0.0, arm)], stroke);
+            let bl = center + Vec2::new(-d, d);
+            painter.line_segment([bl, bl + Vec2::new(arm, 0.0)], stroke);
+            painter.line_segment([bl, bl + Vec2::new(0.0, -arm)], stroke);
+            let br = center + Vec2::new(d, d);
+            painter.line_segment([br, br + Vec2::new(-arm, 0.0)], stroke);
+            painter.line_segment([br, br + Vec2::new(0.0, -arm)], stroke);
+        }
+        NativeIcon::Amoled => {
+            painter.circle_stroke(center, r * 0.72, stroke);
+            painter.circle_filled(center + Vec2::new(r * 0.35, -r * 0.15), r * 0.58, Color32::from_rgb(18, 18, 22));
+        }
+        NativeIcon::Back => {
+            let tip = center + Vec2::new(-r * 0.35, 0.0);
+            painter.line_segment([center + Vec2::new(r * 0.35, -r * 0.55), tip], stroke);
+            painter.line_segment([center + Vec2::new(r * 0.35, r * 0.55), tip], stroke);
+        }
+        NativeIcon::Close => {
+            let d = r * 0.52;
+            painter.line_segment([center + Vec2::new(-d, -d), center + Vec2::new(d, d)], stroke);
+            painter.line_segment([center + Vec2::new(d, -d), center + Vec2::new(-d, d)], stroke);
+        }
+        NativeIcon::Search => {
+            let r_lens = r * 0.48;
+            let c_lens = center + Vec2::new(-r * 0.2, -r * 0.2);
+            painter.circle_stroke(c_lens, r_lens, stroke);
+            let handle_start = c_lens + Vec2::new(r_lens * 0.707, r_lens * 0.707);
+            let handle_end = center + Vec2::new(r * 0.75, r * 0.75);
+            painter.line_segment([handle_start, handle_end], stroke);
+        }
+        NativeIcon::ZoomIn => {
+            let d = r * 0.55;
+            painter.line_segment([center + Vec2::new(-d, 0.0), center + Vec2::new(d, 0.0)], stroke);
+            painter.line_segment([center + Vec2::new(0.0, -d), center + Vec2::new(0.0, d)], stroke);
+        }
+        NativeIcon::ZoomOut => {
+            let d = r * 0.55;
+            painter.line_segment([center + Vec2::new(-d, 0.0), center + Vec2::new(d, 0.0)], stroke);
+        }
+        NativeIcon::Refresh => {
+            painter.circle_stroke(center, r * 0.65, stroke);
+            let tip = center + Vec2::new(r * 0.65, 0.0);
+            painter.line_segment([tip + Vec2::new(-r * 0.3, -r * 0.3), tip], stroke);
+            painter.line_segment([tip + Vec2::new(r * 0.3, -r * 0.3), tip], stroke);
+        }
+    }
+}
+
+pub fn z_icon_button(
+    ui: &mut egui::Ui,
+    tokens: &GlassTokens,
+    icon: NativeIcon,
+    size: Vec2,
+    selected: bool,
+    tooltip: &str,
+) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let hovered = resp.hovered();
+
+    let bg = if selected {
+        tokens.primary_container
+    } else if hovered {
+        tokens.surface_container_high
+    } else {
+        Color32::TRANSPARENT
+    };
+
+    let border = if selected {
+        Stroke::new(1.5_f32, tokens.primary)
+    } else if hovered {
+        Stroke::new(1.0_f32, tokens.border_glass)
+    } else {
+        Stroke::NONE
+    };
+
+    let fg = if selected {
+        tokens.primary
+    } else if hovered {
+        tokens.text_primary
+    } else {
+        tokens.text_muted
+    };
+
+    let painter = ui.painter_at(rect);
+    if bg != Color32::TRANSPARENT {
+        painter.rect_filled(rect, Rounding::same(8.0), bg);
+    }
+    if border != Stroke::NONE {
+        painter.rect_stroke(rect, Rounding::same(8.0), border);
+    }
+
+    paint_native_icon(&painter, rect, icon, fg, 1.6_f32);
+
+    if !tooltip.is_empty() {
+        resp.on_hover_text(tooltip).clicked()
+    } else {
+        resp.clicked()
+    }
+}
+
 /// Cyber-Glass Search Bar matching ZERAVRIX ZSearchBar
 pub fn z_search_bar(
     ui: &mut egui::Ui,
@@ -27,7 +215,14 @@ pub fn z_search_bar(
         .show(ui, |ui| {
             ui.set_width((width - 26.0).max(120.0));
             ui.horizontal(|ui| {
-                ui.label(RichText::new("🔍").size(14.5).color(tokens.primary));
+                let (icon_rect, _) = ui.allocate_exact_size(Vec2::new(18.0, 18.0), Sense::hover());
+                paint_native_icon(
+                    &ui.painter_at(icon_rect),
+                    icon_rect,
+                    NativeIcon::Search,
+                    tokens.primary,
+                    1.6_f32,
+                );
                 let edit = egui::TextEdit::singleline(query)
                     .id(egui::Id::new(id_salt))
                     .hint_text(RichText::new(hint).color(tokens.text_muted).size(13.0))
@@ -157,7 +352,7 @@ pub fn draw_remote_image(
                 let cache_clone = cover_cache.clone();
                 let u_str = u.to_string();
                 let egui_ctx = ctx.clone();
-                let max_dim = (size.x.max(size.y) * 1.6) as u32;
+                let max_dim = (size.x.max(size.y) * 2.5).clamp(400.0, 1080.0) as u32;
                 rt.spawn(async move {
                     let _ = cache_clone.fetch_and_decode(&u_str, max_dim).await;
                     egui_ctx.request_repaint();

@@ -7,12 +7,12 @@ mod widgets;
 use crate::spring::SpringDamper;
 use crate::theme::{apply_kotatsu_visuals, GlassTokens};
 use crate::widgets::{
-    draw_remote_image, floating_continue_button, manga_cover_card, truncate_str, z_chip,
-    z_search_bar, CardAction,
+    draw_remote_image, floating_continue_button, manga_cover_card, paint_native_icon, truncate_str,
+    z_chip, z_icon_button, z_search_bar, CardAction, NativeIcon,
 };
 use eframe::egui::{
-    self, Align, Color32, ColorImage, Layout, Margin, RichText, Rounding, ScrollArea, Sense,
-    Stroke, TextureHandle, TextureOptions, Vec2,
+    self, Align, Align2, Color32, ColorImage, FontId, Layout, Margin, Pos2, Rect, RichText,
+    Rounding, ScrollArea, Sense, Stroke, TextureHandle, TextureOptions, Vec2,
 };
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
@@ -136,7 +136,7 @@ impl SettingsSection {
             SettingsSection::Storage => "Storage & Cache",
             SettingsSection::LibraryBackup => "Library & Backup",
             SettingsSection::System => "System & Network",
-            SettingsSection::About => "About ZIBRA",
+            SettingsSection::About => "About Zibrax",
         }
     }
 
@@ -216,7 +216,6 @@ struct ZibraApp {
     explore_mode: ExploreSubMode,
 
     // Top Chrome & Shelf states
-    top_quick_search: String,
     shelf_search: String,
     active_shelf_filter: Option<ShelfFilter>,
 
@@ -267,6 +266,7 @@ struct ZibraApp {
 
     // Settings Screen states
     settings_section: SettingsSection,
+    is_fullscreen: bool,
     custom_domain_key: String,
     custom_domain_val: String,
     custom_cookie_key: String,
@@ -312,7 +312,6 @@ impl ZibraApp {
             current_screen: NavScreen::History,
             rail_expanded: false,
             explore_mode: ExploreSubMode::PinnedAndSearch,
-            top_quick_search: String::new(),
             shelf_search: String::new(),
             active_shelf_filter: None,
             explore_global_search: String::new(),
@@ -356,6 +355,7 @@ impl ZibraApp {
             reader_scroll_spring: SpringDamper::new(0.0),
             pending_scroll_delta: 0.0,
             settings_section: SettingsSection::Appearance,
+            is_fullscreen: false,
             custom_domain_key: String::new(),
             custom_domain_val: String::new(),
             custom_cookie_key: String::new(),
@@ -647,8 +647,8 @@ impl eframe::App for ZibraApp {
 
         // Global shortcuts (F11 Fullscreen, Ctrl+B toggle rail)
         if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
-            let is_fs = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fs));
+            self.is_fullscreen = !self.is_fullscreen;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.is_fullscreen));
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::B)) {
             self.rail_expanded = !self.rail_expanded;
@@ -727,100 +727,49 @@ impl ZibraApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    // Brand mark / Original Logo
+                    // Transparent brand logo only (no title text, no AI slop clutter)
                     if let Some(ref logo) = self.logo_texture {
                         ui.add(
                             egui::Image::from_texture(logo)
-                                .fit_to_exact_size(Vec2::new(24.0, 24.0))
+                                .fit_to_exact_size(Vec2::new(26.0, 26.0))
                                 .rounding(Rounding::same(6.0)),
                         );
                     } else {
-                        egui::Frame::none()
-                            .fill(tokens.primary_container)
-                            .rounding(Rounding::same(7.0))
-                            .inner_margin(Margin::symmetric(7.0, 3.0))
-                            .show(ui, |ui| {
-                                ui.label(RichText::new("ZX").color(tokens.primary).strong().size(12.5));
-                            });
+                        let (rect, _) = ui.allocate_exact_size(Vec2::new(26.0, 26.0), Sense::hover());
+                        let painter = ui.painter_at(rect);
+                        painter.rect_filled(rect, Rounding::same(6.0), tokens.primary_container);
+                        paint_native_icon(&painter, rect, NativeIcon::Explore, tokens.primary, 1.8_f32);
                     }
 
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new("ZIBRA")
-                            .size(14.5)
-                            .strong()
-                            .color(tokens.text_primary),
-                    );
-                    ui.label(
-                        RichText::new("•")
-                            .size(13.0)
-                            .color(tokens.text_muted),
-                    );
-                    let screen_label = if let Some(ref m) = self.selected_manga {
-                        truncate_str(&m.title, 28)
-                    } else {
-                        self.current_screen.title().to_string()
-                    };
-                    ui.label(
-                        RichText::new(screen_label)
-                            .size(13.0)
-                            .color(tokens.primary)
-                            .strong(),
-                    );
-
-                    ui.add_space(16.0);
-
-                    // Quick Global Search Bar in Chrome
-                    if z_search_bar(
-                        ui,
-                        tokens,
-                        "chrome_global_search",
-                        &mut self.top_quick_search,
-                        "Quick search manga or manhwa across sources…",
-                        320.0,
-                    ) && !self.top_quick_search.trim().is_empty()
-                    {
-                        self.explore_global_search = self.top_quick_search.clone();
-                        self.selected_manga = None;
-                        self.current_screen = NavScreen::Explore;
-                        self.explore_mode = ExploreSubMode::PinnedAndSearch;
-                        self.trigger_global_search(ctx);
-                    }
-
+                    // Right-aligned controls: native vector Fullscreen and AMOLED toggles
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        // AMOLED quick toggle pill
-                        let amoled_label = if self.settings.is_amoled {
-                            "🌙 AMOLED ON"
-                        } else {
-                            "🌙 AMOLED"
-                        };
-                        if z_chip(ui, tokens, amoled_label, None, self.settings.is_amoled) {
+                        // Fullscreen toggle button
+                        if z_icon_button(
+                            ui,
+                            tokens,
+                            NativeIcon::Fullscreen,
+                            Vec2::new(32.0, 32.0),
+                            self.is_fullscreen,
+                            if self.is_fullscreen { "Exit Fullscreen (F11)" } else { "Enter Fullscreen (F11)" },
+                        ) {
+                            self.is_fullscreen = !self.is_fullscreen;
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.is_fullscreen));
+                        }
+
+                        ui.add_space(6.0);
+
+                        // AMOLED / Dark mode toggle
+                        if z_icon_button(
+                            ui,
+                            tokens,
+                            NativeIcon::Amoled,
+                            Vec2::new(32.0, 32.0),
+                            self.settings.is_amoled,
+                            if self.settings.is_amoled { "AMOLED Black Active" } else { "Switch to AMOLED Black" },
+                        ) {
                             self.settings.is_amoled = !self.settings.is_amoled;
                             let _ = self.settings_store.save(&self.settings);
                         }
-
-                        // Catalog count badge
-                        egui::Frame::none()
-                            .fill(tokens.surface_container_high)
-                            .stroke(Stroke::new(1.0_f32, tokens.border_glass))
-                            .rounding(Rounding::same(8.0))
-                            .inner_margin(Margin::symmetric(10.0, 4.0))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new(format!("🌐 {} Sources", self.registry.visible_count(self.settings.nsfw_enabled)))
-                                        .size(11.5)
-                                        .color(tokens.primary)
-                                        .strong(),
-                                );
-                            });
-
-                        // Status banner text
-                        let status = self.status_banner.read().clone();
-                        ui.label(
-                            RichText::new(truncate_str(&status, 48))
-                                .size(11.5)
-                                .color(tokens.text_muted),
-                        );
                     });
                 });
             });
@@ -840,9 +789,9 @@ impl ZibraApp {
             .show(ctx, |ui| {
                 // Top Group: 1. History, 2. Favorites, 3. Explore (exact match to AppNavigationRail.kt)
                 let top_group = [
-                    (NavScreen::History, "🕒", "History"),
-                    (NavScreen::Favorites, "❤", "Favorites"),
-                    (NavScreen::Explore, "🧭", "Explore"),
+                    (NavScreen::History, NativeIcon::History, "History"),
+                    (NavScreen::Favorites, NativeIcon::Favorites, "Favorites"),
+                    (NavScreen::Explore, NativeIcon::Explore, "Explore"),
                 ];
 
                 ui.vertical_centered(|ui| {
@@ -873,7 +822,7 @@ impl ZibraApp {
                     }
                     ui.add_space(4.0);
 
-                    if self.nav_rail_button(ui, tokens, NavScreen::Settings, "⚙", "Settings", None) {
+                    if self.nav_rail_button(ui, tokens, NavScreen::Settings, NativeIcon::Settings, "Settings", None) {
                         self.current_screen = NavScreen::Settings;
                         self.selected_manga = None;
                     }
@@ -894,7 +843,7 @@ impl ZibraApp {
                         ui,
                         tokens,
                         NavScreen::Downloads,
-                        "⬇",
+                        NativeIcon::Downloads,
                         "Downloads",
                         dl_badge.as_deref(),
                     ) {
@@ -903,7 +852,7 @@ impl ZibraApp {
                     }
                     ui.add_space(6.0);
 
-                    if self.nav_rail_button(ui, tokens, NavScreen::Feed, "📡", "Feed", None) {
+                    if self.nav_rail_button(ui, tokens, NavScreen::Feed, NativeIcon::Feed, "Feed", None) {
                         self.current_screen = NavScreen::Feed;
                         self.selected_manga = None;
                     }
@@ -916,7 +865,7 @@ impl ZibraApp {
         ui: &mut egui::Ui,
         tokens: &GlassTokens,
         screen: NavScreen,
-        icon: &str,
+        icon: NativeIcon,
         label: &str,
         badge: Option<&str>,
     ) -> bool {
@@ -924,50 +873,65 @@ impl ZibraApp {
         let btn_size = if self.rail_expanded {
             Vec2::new(152.0, 42.0)
         } else {
-            Vec2::new(50.0, 42.0)
+            Vec2::new(48.0, 42.0)
         };
 
-        let text = if self.rail_expanded {
-            if let Some(b) = badge {
-                format!("{}   {} ({})", icon, label, b)
-            } else {
-                format!("{}   {}", icon, label)
-            }
-        } else {
-            icon.to_string()
-        };
+        let (rect, resp) = ui.allocate_exact_size(btn_size, Sense::click());
+        let hovered = resp.hovered();
 
         let fg = if selected {
             tokens.primary
+        } else if hovered {
+            tokens.text_primary
         } else {
             tokens.text_muted
         };
         let fill = if selected {
             tokens.primary_container
+        } else if hovered {
+            tokens.surface_container_high
         } else {
             Color32::TRANSPARENT
         };
         let stroke = if selected {
             Stroke::new(1.5_f32, tokens.border_glow)
+        } else if hovered {
+            Stroke::new(1.0_f32, tokens.border_glass)
         } else {
             Stroke::NONE
         };
 
-        let btn = egui::Button::new(
-            RichText::new(text)
-                .size(if self.rail_expanded { 13.5 } else { 18.0 })
-                .color(fg)
-                .strong(),
-        )
-        .fill(fill)
-        .stroke(stroke)
-        .rounding(Rounding::same(13.0))
-        .min_size(btn_size);
+        let painter = ui.painter_at(rect);
+        if fill != Color32::TRANSPARENT {
+            painter.rect_filled(rect, Rounding::same(12.0), fill);
+        }
+        if stroke != Stroke::NONE {
+            painter.rect_stroke(rect, Rounding::same(12.0), stroke);
+        }
 
-        let resp = ui.add(btn);
-        let clicked = resp.clicked();
-        resp.on_hover_text(label);
-        clicked
+        if self.rail_expanded {
+            let icon_rect = Rect::from_min_size(rect.min + Vec2::new(12.0, 9.0), Vec2::new(24.0, 24.0));
+            paint_native_icon(&painter, icon_rect, icon, fg, 1.8_f32);
+
+            let text_pos = Pos2::new(rect.min.x + 44.0, rect.center().y);
+            let display_text = if let Some(b) = badge {
+                format!("{} ({})", label, b)
+            } else {
+                label.to_string()
+            };
+            painter.text(
+                text_pos,
+                Align2::LEFT_CENTER,
+                display_text,
+                FontId::proportional(13.5),
+                fg,
+            );
+        } else {
+            let icon_rect = Rect::from_center_size(rect.center(), Vec2::new(24.0, 24.0));
+            paint_native_icon(&painter, icon_rect, icon, fg, 1.8_f32);
+        }
+
+        resp.on_hover_text(label).clicked()
     }
 
     fn render_shelf_screen(
@@ -2603,13 +2567,13 @@ impl ZibraApp {
                 )
                 .show(ctx, |ui| {
                     ui.horizontal_centered(|ui| {
-                        if z_chip(ui, tokens, "Back", Some("⬅"), false) {
+                        if z_icon_button(ui, tokens, NativeIcon::Back, Vec2::new(32.0, 32.0), false, "Back") {
                             self.active_reader_chapter = None;
                         }
                         ui.add_space(6.0);
 
                         if let Some(ref prv) = prev_chapter {
-                            if z_chip(ui, tokens, "Prev Ch", Some("⏮"), false) {
+                            if z_chip(ui, tokens, "Prev Ch", None, false) {
                                 next_ch_requested = Some(prv.clone());
                             }
                         }
@@ -2631,28 +2595,36 @@ impl ZibraApp {
                         });
 
                         if let Some(ref nxt) = next_chapter {
-                            if z_chip(ui, tokens, "Next Ch", Some("⏭"), false) {
+                            if z_chip(ui, tokens, "Next Ch", None, false) {
                                 next_ch_requested = Some(nxt.clone());
                             }
                         }
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if z_chip(
+                            if z_icon_button(
                                 ui,
                                 tokens,
-                                "Settings",
-                                Some("⚙"),
+                                NativeIcon::Settings,
+                                Vec2::new(32.0, 32.0),
                                 self.reader_show_settings_popup,
+                                "Reader Settings",
                             ) {
                                 self.reader_show_settings_popup = !self.reader_show_settings_popup;
                             }
 
-                            if z_chip(ui, tokens, "⛶", None, false) {
-                                let is_fs = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fs));
+                            if z_icon_button(
+                                ui,
+                                tokens,
+                                NativeIcon::Fullscreen,
+                                Vec2::new(32.0, 32.0),
+                                self.is_fullscreen,
+                                if self.is_fullscreen { "Exit Fullscreen (F11)" } else { "Enter Fullscreen (F11)" },
+                            ) {
+                                self.is_fullscreen = !self.is_fullscreen;
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.is_fullscreen));
                             }
 
-                            if z_chip(ui, tokens, "➕", None, false) {
+                            if z_icon_button(ui, tokens, NativeIcon::ZoomIn, Vec2::new(30.0, 30.0), false, "Zoom In (+)") {
                                 self.reader_zoom = (self.reader_zoom + 0.15).min(2.6);
                             }
                             ui.label(
@@ -2661,7 +2633,7 @@ impl ZibraApp {
                                     .strong()
                                     .color(tokens.text_primary),
                             );
-                            if z_chip(ui, tokens, "➖", None, false) {
+                            if z_icon_button(ui, tokens, NativeIcon::ZoomOut, Vec2::new(30.0, 30.0), false, "Zoom Out (-)") {
                                 self.reader_zoom = (self.reader_zoom - 0.15).max(0.35);
                             }
 
@@ -2733,7 +2705,7 @@ impl ZibraApp {
                 .show(ctx, |ui| {
                     ui.horizontal_centered(|ui| {
                         let step = if effective_mode == ReaderModePreference::Double { 2 } else { 1 };
-                        if z_chip(ui, tokens, "Prev Page", Some("⬅"), false) {
+                        if z_chip(ui, tokens, "Prev Page", None, false) {
                             if self.reader_current_page >= step {
                                 self.reader_current_page -= step;
                             } else if let Some(ref prv) = prev_chapter {
@@ -2752,7 +2724,7 @@ impl ZibraApp {
                             self.reader_current_page = page_slider.saturating_sub(1);
                         }
 
-                        if z_chip(ui, tokens, "Next Page", Some("➡"), false) {
+                        if z_chip(ui, tokens, "Next Page", None, false) {
                             if self.reader_current_page + step < total_pages {
                                 self.reader_current_page += step;
                             } else if let Some(ref nxt) = next_chapter {
@@ -3101,6 +3073,45 @@ impl ZibraApp {
                                 ui.vertical_centered(|ui| {
                                     ui.spacing_mut().item_spacing.y = self.reader_page_gap;
 
+                                    let cur_p = self.reader_current_page;
+                                    let min_p = cur_p.saturating_sub(2);
+                                    let max_p = cur_p + 3;
+
+                                    // Windowed memory management: retain only [cur_p - 2, cur_p + 3] active pages in GPU and RAM
+                                    let mut active_urls: HashSet<String> = HashSet::new();
+                                    for sec in sections.iter() {
+                                        for p in &sec.pages {
+                                            if p.index >= min_p && p.index <= max_p {
+                                                active_urls.insert(p.image_url.clone());
+                                            }
+                                        }
+                                    }
+                                    self.reader_textures.retain(|url, _| active_urls.contains(url));
+                                    let active_list: Vec<String> = active_urls.into_iter().collect();
+                                    self.reader_pipeline.prune_except(&active_list);
+
+                                    // Asynchronously preload upcoming 3 pages
+                                    for sec in sections.iter() {
+                                        for p in &sec.pages {
+                                            if p.index > cur_p && p.index <= cur_p + 3 {
+                                                if matches!(self.reader_pipeline.get_status(&p.image_url), PageLoadStatus::Idle) {
+                                                    let pipe = self.reader_pipeline.clone();
+                                                    let p_clone = p.clone();
+                                                    let effective_trim = if self.settings.auto_crop_margins {
+                                                        self.settings.seam_trim_px.max(4)
+                                                    } else {
+                                                        self.settings.seam_trim_px
+                                                    };
+                                                    let egui_ctx = ctx.clone();
+                                                    self.rt.spawn(async move {
+                                                        let _ = pipe.load_and_slice_page(&p_clone, effective_trim).await;
+                                                        egui_ctx.request_repaint();
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     for (sec_idx, sec) in sections.iter().enumerate() {
                                         // Chapter Divider Banner between appended chapters (matching DesktopReaderView.kt ContinuousReaderItem.ChapterDivider)
                                         if sec_idx > 0 {
@@ -3138,7 +3149,9 @@ impl ZibraApp {
                                         let sec_pages_len = sec.pages.len();
                                         for page in &sec.pages {
                                             let page_start_y = ui.cursor().min.y;
-                                            match self.reader_pipeline.get_status(&page.image_url) {
+                                            let in_window = page.index >= min_p && page.index <= max_p;
+                                            if in_window {
+                                                match self.reader_pipeline.get_status(&page.image_url) {
                                                 PageLoadStatus::Ready(sliced) => {
                                                     let c_adj = self.reader_contrast;
                                                     let s_adj = self.reader_saturation;
@@ -3257,6 +3270,16 @@ impl ZibraApp {
                                                     }
                                                 }
                                             }
+                                        } else {
+                                            let placeholder_h = match self.reader_pipeline.get_status(&page.image_url) {
+                                                PageLoadStatus::Ready(ref s) => (s.total_height as f32) * (avail_w / (s.total_width.max(1) as f32)),
+                                                _ => (avail_w * 1.35).clamp(360.0, 900.0),
+                                            };
+                                            let (rect, _) = ui.allocate_exact_size(Vec2::new(avail_w, placeholder_h), Sense::hover());
+                                            if ui.is_rect_visible(rect) {
+                                                ui.painter().rect_filled(rect, Rounding::ZERO, tokens.surface_container_high);
+                                            }
+                                        }
 
                                             let page_end_y = ui.cursor().min.y;
                                             if page_start_y <= viewport_center_y
@@ -3405,12 +3428,23 @@ impl ZibraApp {
                     }
 
                     ReaderModePreference::Single | ReaderModePreference::Double => {
-                        // Rolling Prefetch for Single / Double Page Mode
+                        // Rolling Prefetch and Windowed Memory Management for Single / Double Page Mode
                         let cur_idx = self.reader_current_page.min(pages.len().saturating_sub(1));
-                        let preload_to = (cur_idx + self.settings.preload_pages_ahead.max(4))
+                        let min_p = cur_idx.saturating_sub(2);
+                        let max_p = (cur_idx + 3).min(pages.len().saturating_sub(1));
+
+                        // Retain only [cur_p - 2, cur_p + 3] active pages in GPU and RAM
+                        let mut active_urls: HashSet<String> = HashSet::new();
+                        for p in &pages[min_p..=max_p] {
+                            active_urls.insert(p.image_url.clone());
+                        }
+                        self.reader_textures.retain(|url, _| active_urls.contains(url));
+                        let active_list: Vec<String> = active_urls.into_iter().collect();
+                        self.reader_pipeline.prune_except(&active_list);
+
+                        let preload_to = (cur_idx + self.settings.preload_pages_ahead.max(3))
                             .min(pages.len().saturating_sub(1));
-                        let preload_from = cur_idx.saturating_sub(2);
-                        for p in &pages[preload_from..=preload_to] {
+                        for p in &pages[min_p..=preload_to] {
                             if matches!(
                                 self.reader_pipeline.get_status(&p.image_url),
                                 PageLoadStatus::Idle
@@ -4455,7 +4489,7 @@ impl ZibraApp {
 
                             SettingsSection::About => {
                                 ui.label(
-                                    RichText::new("ZIBRA v2.2.0 — Native Rust Edition of ZERAVRIX")
+                                    RichText::new("Zibrax v2.2.0 — Native Manga & Manhwa Reader")
                                         .size(18.0)
                                         .strong()
                                         .color(tokens.primary),
@@ -4588,7 +4622,7 @@ fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([1320.0, 840.0])
         .with_min_inner_size([920.0, 620.0])
-        .with_title("ZIBRA • Native Rust Manga & Manhwa Reader");
+        .with_title("Zibrax • Native Manga & Manhwa Reader");
     if let Some(icon) = load_window_icon() {
         viewport = viewport.with_icon(Arc::new(icon));
     }
@@ -4598,7 +4632,7 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "ZIBRA",
+        "Zibrax",
         options,
         Box::new(|cc| Ok(Box::new(ZibraApp::new(cc)))),
     )

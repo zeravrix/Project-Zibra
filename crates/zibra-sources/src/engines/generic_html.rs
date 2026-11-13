@@ -40,8 +40,12 @@ impl GenericHtmlEngine {
         let resp = self
             .client
             .get(url)
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
             .header("Referer", format!("{}/", self.base_url))
+            .header("sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-ch-ua-platform", "\"Windows\"")
             .send()
             .await?;
         if !resp.status().is_success() {

@@ -60,8 +60,25 @@ impl MangaDexSource {
         Some(m)
     }
 
+    async fn get_json(&self, url: &str) -> anyhow::Result<Value> {
+        let resp = self
+            .client
+            .get(url)
+            .header("User-Agent", "Zibrax-App/2.2.0 (https://github.com/zeravrix/Project-Zibra)")
+            .send()
+            .await?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!("MangaDex returned HTTP {}: {}", status, text);
+        }
+        let root: Value = serde_json::from_str(&text)
+            .map_err(|e| anyhow::anyhow!("MangaDex JSON error: {} (body len {})", e, text.len()))?;
+        Ok(root)
+    }
+
     async fn fetch_list(&self, url: &str) -> anyhow::Result<MangaPageResult> {
-        let root: Value = self.client.get(url).send().await?.json().await?;
+        let root = self.get_json(url).await?;
         let items: Vec<Manga> = root
             .get("data")
             .and_then(|d| d.as_array())
@@ -125,7 +142,7 @@ impl Source for MangaDexSource {
 
     async fn details(&self, manga: &Manga) -> anyhow::Result<Manga> {
         let url = format!("{}/manga/{}?includes[]=cover_art", self.api_url, manga.id);
-        let root: Value = self.client.get(&url).send().await?.json().await?;
+        let root = self.get_json(&url).await?;
         if let Some(data) = root.get("data") {
             if let Some(m) = self.parse_manga_data(data) {
                 return Ok(m);
@@ -139,7 +156,7 @@ impl Source for MangaDexSource {
             "{}/manga/{}/feed?limit=200&translatedLanguage[]=en&translatedLanguage[]=ar&order[chapter]=desc",
             self.api_url, manga.id
         );
-        let root: Value = self.client.get(&url).send().await?.json().await?;
+        let root = self.get_json(&url).await?;
         let mut list = Vec::new();
         if let Some(arr) = root.get("data").and_then(|d| d.as_array()) {
             for item in arr {
@@ -166,7 +183,7 @@ impl Source for MangaDexSource {
 
     async fn pages(&self, chapter: &Chapter) -> anyhow::Result<Vec<MangaPage>> {
         let url = format!("{}/at-home/server/{}", self.api_url, chapter.id);
-        let root: Value = self.client.get(&url).send().await?.json().await?;
+        let root = self.get_json(&url).await?;
         let base_url = root
             .get("baseUrl")
             .and_then(|v| v.as_str())

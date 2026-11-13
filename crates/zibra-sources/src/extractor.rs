@@ -18,7 +18,7 @@ static CHAPTER_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(?:chapter|ch|episode|ep|chapitre|capítulo|capitulo|الفصل|فصل)?\s*([0-9]+(?:\.[0-9]+)?)").unwrap()
 });
 static THUMB_SIZE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[-_]\d{2,5}x\d{2,5}(?=\.[a-zA-Z]{2,5}(?:\?|$))").unwrap()
+    Regex::new(r"[-_]\d{2,5}x\d{2,5}(\.[a-zA-Z0-9]{2,5})").unwrap()
 });
 
 pub fn parse_chapter_number(text: &str) -> Option<f32> {
@@ -30,7 +30,7 @@ pub fn parse_chapter_number(text: &str) -> Option<f32> {
 
 pub fn normalize_cover_url(raw: &str) -> String {
     let cleaned_ws: String = raw.trim().chars().filter(|c| !c.is_control()).collect();
-    let cleaned = THUMB_SIZE_REGEX.replace_all(&cleaned_ws, "");
+    let cleaned = THUMB_SIZE_REGEX.replace_all(&cleaned_ws, "$1");
     cleaned
         .replace("/thumb/", "/")
         .replace("/thumbs/", "/")

@@ -466,13 +466,13 @@ impl CoverImageCache {
         let _permit = self.fetch_semaphore.acquire().await?;
         let raw_bytes = self.fetch_cover_bytes(url).await?;
         let url_key = url.to_string();
-        let target_max = max_dim.clamp(64, 720);
+        let target_max = max_dim.clamp(120, 1200);
 
         let decoded = tokio::task::spawn_blocking(move || -> anyhow::Result<DecodedCover> {
             let img = image::load_from_memory(&raw_bytes)?;
             let (w, h) = img.dimensions();
             let resized = if w > target_max || h > (target_max * 3 / 2) {
-                img.resize(target_max, target_max * 3 / 2, FilterType::Triangle)
+                img.resize(target_max, target_max * 3 / 2, FilterType::CatmullRom)
             } else {
                 img
             };
