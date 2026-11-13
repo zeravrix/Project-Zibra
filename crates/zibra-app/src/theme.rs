@@ -26,9 +26,19 @@ pub struct GlassTokens {
 }
 
 impl GlassTokens {
+    #[allow(dead_code)]
     pub fn from_settings(settings: &AppSettings) -> Self {
+        Self::from_settings_with_bg(settings, None)
+    }
+
+    pub fn from_settings_with_bg(settings: &AppSettings, bg_luminance: Option<f32>) -> Self {
         let is_amoled = settings.is_amoled || settings.color_theme == ColorTheme::AmoledVoid;
-        let is_dark = settings.theme == AppTheme::Dark || is_amoled;
+        let mut is_dark = settings.theme == AppTheme::Dark || is_amoled;
+
+        if settings.auto_optimize_bg && bg_luminance.is_some() {
+            let lum = bg_luminance.unwrap();
+            is_dark = lum <= 0.55;
+        }
 
         let (pr, pg, pb) = if is_dark {
             settings.color_theme.primary_rgb()
@@ -44,9 +54,15 @@ impl GlassTokens {
         } else {
             Color32::WHITE
         };
-        let primary_container = Color32::from_rgba_unmultiplied(pr, pg, pb, if is_dark { 52 } else { 38 });
+        let primary_container = Color32::from_rgba_unmultiplied(pr, pg, pb, if is_dark { 48 } else { 34 });
 
-        let background = if is_amoled {
+        let background = if let Some(lum) = bg_luminance.filter(|_| settings.auto_optimize_bg) {
+            if lum > 0.55 {
+                Color32::from_rgba_unmultiplied(246, 248, 252, 65)
+            } else {
+                Color32::from_rgba_unmultiplied(10, 13, 18, 65)
+            }
+        } else if is_amoled {
             Color32::from_rgb(0x00, 0x00, 0x00)
         } else if is_dark {
             let (r, g, b) = settings.color_theme.dark_bg_rgb();
@@ -62,7 +78,13 @@ impl GlassTokens {
             background
         };
 
-        let surface_container = if is_amoled {
+        let surface_container = if bg_luminance.is_some() && settings.auto_optimize_bg {
+            if is_dark {
+                Color32::from_rgba_unmultiplied(18, 22, 30, 215)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, 215)
+            }
+        } else if is_amoled {
             Color32::from_rgb(0x0E, 0x10, 0x14)
         } else if is_dark {
             let (r, g, b) = settings.color_theme.dark_surface_container_rgb();
@@ -72,14 +94,20 @@ impl GlassTokens {
             Color32::from_rgb(r, g, b)
         };
 
-        let surface_container_high = if is_amoled {
+        let surface_container_high = if bg_luminance.is_some() && settings.auto_optimize_bg {
+            if is_dark {
+                Color32::from_rgba_unmultiplied(26, 32, 44, 230)
+            } else {
+                Color32::from_rgba_unmultiplied(242, 245, 250, 230)
+            }
+        } else if is_amoled {
             Color32::from_rgb(0x16, 0x18, 0x1E)
         } else if is_dark {
             let (r, g, b) = settings.color_theme.dark_surface_container_rgb();
-            Color32::from_rgb(r.saturating_add(9), g.saturating_add(10), b.saturating_add(14))
+            Color32::from_rgb(r.saturating_add(8), g.saturating_add(9), b.saturating_add(12))
         } else {
             let (r, g, b) = settings.color_theme.light_surface_container_rgb();
-            Color32::from_rgb(r.saturating_sub(8), g.saturating_sub(8), b.saturating_sub(6))
+            Color32::from_rgb(r.saturating_sub(6), g.saturating_sub(6), b.saturating_sub(5))
         };
 
         let surface_card = if is_amoled {
@@ -109,23 +137,23 @@ impl GlassTokens {
         };
 
         let border_glass = if is_dark {
-            Color32::from_rgba_unmultiplied(0x52, 0x5A, 0x6E, 110)
+            Color32::from_rgba_unmultiplied(0xFF, 0xFF, 0xFF, 30)
         } else {
-            Color32::from_rgba_unmultiplied(0x94, 0x9B, 0xAA, 130)
+            Color32::from_rgba_unmultiplied(0x1A, 0x20, 0x2C, 35)
         };
 
-        let border_glow = Color32::from_rgba_unmultiplied(pr, pg, pb, 165);
+        let border_glow = Color32::from_rgba_unmultiplied(pr, pg, pb, 150);
 
         let text_primary = if is_dark {
-            Color32::from_rgb(0xF0, 0xF2, 0xF8)
+            Color32::from_rgb(0xF2, 0xF4, 0xF8)
         } else {
-            Color32::from_rgb(0x16, 0x19, 0x20)
+            Color32::from_rgb(0x14, 0x17, 0x20)
         };
 
         let text_muted = if is_dark {
-            Color32::from_rgb(0x9C, 0xA3, 0xB2)
+            Color32::from_rgb(0x9A, 0xA2, 0xB2)
         } else {
-            Color32::from_rgb(0x5E, 0x65, 0x73)
+            Color32::from_rgb(0x58, 0x60, 0x70)
         };
 
         Self {

@@ -1,4 +1,7 @@
-use crate::extractor::{extract_best_image_url, extract_chapter_pages, parse_chapter_number, resolve_url};
+use crate::extractor::{
+    extract_best_image_url, extract_chapter_pages, fetch_html_resilient, parse_chapter_number,
+    resolve_url,
+};
 use crate::{MangaPageResult, Source};
 use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
@@ -37,37 +40,40 @@ impl MadaraEngine {
     }
 
     async fn fetch_html(&self, url: &str) -> anyhow::Result<String> {
-        let resp = self
-            .client
-            .get(url)
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
-            .header("Referer", format!("{}/", self.base_url))
-            .header("sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
-            .header("sec-ch-ua-mobile", "?0")
-            .header("sec-ch-ua-platform", "\"Windows\"")
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            anyhow::bail!("{} returned HTTP {} at {}", self.name, resp.status(), url);
-        }
-        Ok(resp.text().await?)
+        fetch_html_resilient(&self.client, url, Some(&self.base_url)).await
     }
 
     fn parse_card(&self, card: ElementRef<'_>, page_url: &str) -> Option<Manga> {
-        let link_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comics/'], a[href*='/webtoon/'], .post-title a, h3 a, h4 a, a").ok()?;
-        let anchor = card.select(&link_sel).next()?;
+        let is_anchor = card.value().name() == "a";
+        let link_sel = Selector::parse(
+            "a[href*='/manga/'], a[href*='/series/'], a[href*='/serie/'], a[href*='/comics/'], a[href*='/comic/'], a[href*='/webtoon/'], a[href*='/webtoons/'], a[href*='/komik/'], a[href*='/titles/'], .post-title a, .entry-title a, .item-title a, h3 a, h4 a, h5 a, .thumb a, a",
+        ).ok()?;
+        
+        let anchor = if is_anchor && card.value().attr("href").is_some() {
+            card
+        } else {
+            card.select(&link_sel).next()?
+        };
         let href = anchor.value().attr("href")?;
         let url = resolve_url(page_url, href)?;
-        if url == self.base_url
-            || url.ends_with("/manga/")
-            || url.ends_with("/series/")
-            || url.ends_with("/comics/")
+        let clean_path = url.trim_end_matches('/');
+        if clean_path == self.base_url
+            || clean_path.ends_with("/manga")
+            || clean_path.ends_with("/series")
+            || clean_path.ends_with("/webtoons")
+            || clean_path.ends_with("/comics")
+            || clean_path.contains("/genre/")
+            || clean_path.contains("/genres/")
+            || clean_path.contains("/category/")
+            || clean_path.contains("/tag/")
+            || clean_path.contains("/author/")
+            || clean_path.contains("/user/")
+            || clean_path.contains("/bookmark")
         {
             return None;
         }
 
-        let title_sel = Selector::parse(".post-title, .entry-title, .data h3, .tt, h3, h4").ok()?;
+        let title_sel = Selector::parse(".post-title, .entry-title, .item-title, .data h3, .tt, h3, h4, h5").ok()?;
         let title = card
             .select(&title_sel)
             .next()
@@ -97,17 +103,29 @@ impl MadaraEngine {
                 format!("{}/page/{}/?s={}&post_type=wp-manga", self.base_url, p, enc),
                 format!("{}/?s={}&post_type=wp-manga&paged={}", self.base_url, enc, p),
                 format!("{}/?s={}&page={}", self.base_url, enc, p),
+                format!("{}/?s={}", self.base_url, enc),
             ]
         } else {
-            vec![
-                format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order),
-                format!("{}/page/{}/?s=&post_type=wp-manga&m_orderby={}", self.base_url, p, order),
-                if p <= 1 {
-                    format!("{}/manga/?m_orderby={}", self.base_url, order)
-                } else {
-                    format!("{}/page/{}/", self.base_url, p)
-                },
-            ]
+            let mut list = Vec::new();
+            if p > 1 {
+                list.push(format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/webtoons/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/series/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/page/{}/?s=&post_type=wp-manga&m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/page/{}/?m_orderby={}", self.base_url, p, order));
+                list.push(format!("{}/page/{}/", self.base_url, p));
+            } else {
+                list.push(format!("{}/manga/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/webtoons/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/series/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/webtoons/", self.base_url));
+                list.push(format!("{}/webtoon/", self.base_url));
+                list.push(format!("{}/manga/", self.base_url));
+                list.push(format!("{}/series/", self.base_url));
+                list.push(format!("{}/?m_orderby={}", self.base_url, order));
+                list.push(format!("{}/", self.base_url));
+            }
+            list
         };
 
         let mut html = String::new();
@@ -129,7 +147,9 @@ impl MadaraEngine {
         }
 
         let doc = Html::parse_document(&html);
-        let card_sel = Selector::parse("div.page-item-detail, .row.c-tabs-item__content, .manga__item, .manga-item, .item-summary, .bsx, .listupd .bs, .box").unwrap();
+        let card_sel = Selector::parse(
+            "div.page-item-detail, .row.c-tabs-item__content, .manga__item, .manga-item, .item-summary, .bsx, .listupd .bs, .box, .page-listing-item, .item-thumb, .col-6, .col-md-2, .col-sm-3, .col-xs-4, article",
+        ).unwrap();
         let mut items = Vec::new();
         let mut seen = HashSet::new();
 
@@ -137,6 +157,18 @@ impl MadaraEngine {
             if let Some(m) = self.parse_card(card, &active_url) {
                 if seen.insert(m.id.clone()) {
                     items.push(m);
+                }
+            }
+        }
+
+        // Secondary fallback: if standard cards returned nothing, scan for any series anchor directly
+        if items.is_empty() {
+            let direct_sel = Selector::parse("a[href*='/serie/'], a[href*='/series/'], a[href*='/manga/'], a[href*='/webtoon/']").unwrap();
+            for a in doc.select(&direct_sel) {
+                if let Some(m) = self.parse_card(a, &active_url) {
+                    if seen.insert(m.id.clone()) {
+                        items.push(m);
+                    }
                 }
             }
         }

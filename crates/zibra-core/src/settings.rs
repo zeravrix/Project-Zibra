@@ -313,6 +313,10 @@ pub fn default_pinned_source_ids() -> HashSet<String> {
     .collect()
 }
 
+fn default_auto_bg() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub theme: AppTheme,
@@ -347,6 +351,10 @@ pub struct AppSettings {
     pub komga_api_key: String,
     pub kavita_server_url: String,
     pub kavita_api_key: String,
+    #[serde(default)]
+    pub custom_background_path: Option<String>,
+    #[serde(default = "default_auto_bg")]
+    pub auto_optimize_bg: bool,
 }
 
 impl Default for AppSettings {
@@ -363,6 +371,8 @@ impl Default for AppSettings {
             auto_crop_margins: false,
             preferred_source_language: "ALL".to_string(),
             custom_icon_path: None,
+            custom_background_path: None,
+            auto_optimize_bg: true,
             infinite_chapter_scroll: true,
             preload_pages_ahead: 5,
             preload_pages_behind: 3,

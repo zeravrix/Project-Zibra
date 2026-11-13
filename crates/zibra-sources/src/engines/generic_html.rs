@@ -1,4 +1,7 @@
-use crate::extractor::{extract_best_image_url, extract_chapter_pages, parse_chapter_number, resolve_url};
+use crate::extractor::{
+    extract_best_image_url, extract_chapter_pages, fetch_html_resilient, parse_chapter_number,
+    resolve_url,
+};
 use crate::{MangaPageResult, Source};
 use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
@@ -37,64 +40,58 @@ impl GenericHtmlEngine {
     }
 
     async fn fetch_html(&self, url: &str) -> anyhow::Result<String> {
-        let resp = self
-            .client
-            .get(url)
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
-            .header("Referer", format!("{}/", self.base_url))
-            .header("sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
-            .header("sec-ch-ua-mobile", "?0")
-            .header("sec-ch-ua-platform", "\"Windows\"")
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            anyhow::bail!("{} returned HTTP {} at {}", self.name, resp.status(), url);
-        }
-        Ok(resp.text().await?)
+        fetch_html_resilient(&self.client, url, Some(&self.base_url)).await
     }
 
     fn parse_generic_card(&self, card: ElementRef<'_>, page_url: &str) -> Option<Manga> {
-        let a_sel = Selector::parse("a[href]").ok()?;
-        let mut best_anchor = None;
-        let mut best_score = -1i32;
+        let is_anchor = card.value().name() == "a";
+        let link = if is_anchor && card.value().attr("href").is_some() {
+            Some(card)
+        } else {
+            let a_sel = Selector::parse("a[href]").ok()?;
+            let mut best_anchor = None;
+            let mut best_score = -1i32;
 
-        for candidate in card.select(&a_sel) {
-            let Some(href) = candidate.value().attr("href") else { continue };
-            let lower = href.to_ascii_lowercase();
-            if lower.contains("javascript:") || lower.contains('#') {
-                continue;
+            for candidate in card.select(&a_sel) {
+                let Some(href) = candidate.value().attr("href") else { continue };
+                let lower = href.to_ascii_lowercase();
+                if lower.contains("javascript:") || lower.contains('#') {
+                    continue;
+                }
+                let img_sel = Selector::parse("img").ok()?;
+                let mut score = 0;
+                if candidate.select(&img_sel).next().is_some() {
+                    score += 5;
+                }
+                if lower.contains("/manga/")
+                    || lower.contains("/series/")
+                    || lower.contains("/serie/")
+                    || lower.contains("/title/")
+                    || lower.contains("/comic/")
+                    || lower.contains("/comics/")
+                    || lower.contains("/webtoon/")
+                    || lower.contains("/webtoons/")
+                    || lower.contains("/manhwa/")
+                    || lower.contains("/komik/")
+                {
+                    score += 4;
+                }
+                if !lower.contains("chapter")
+                    && !lower.contains("episode")
+                    && !lower.contains("genre")
+                    && !lower.contains("tag")
+                    && !lower.contains("login")
+                {
+                    score += 2;
+                }
+                if score > best_score {
+                    best_score = score;
+                    best_anchor = Some(candidate);
+                }
             }
-            let img_sel = Selector::parse("img").ok()?;
-            let mut score = 0;
-            if candidate.select(&img_sel).next().is_some() {
-                score += 5;
-            }
-            if lower.contains("/manga/")
-                || lower.contains("/series/")
-                || lower.contains("/title/")
-                || lower.contains("/comic/")
-                || lower.contains("/comics/")
-                || lower.contains("/webtoon/")
-                || lower.contains("/manhwa/")
-            {
-                score += 4;
-            }
-            if !lower.contains("chapter")
-                && !lower.contains("episode")
-                && !lower.contains("genre")
-                && !lower.contains("tag")
-                && !lower.contains("login")
-            {
-                score += 2;
-            }
-            if score > best_score {
-                best_score = score;
-                best_anchor = Some(candidate);
-            }
-        }
+            best_anchor
+        }?;
 
-        let link = best_anchor?;
         let href = link.value().attr("href")?;
         let url = resolve_url(page_url, href)?;
         if !url.starts_with("http")

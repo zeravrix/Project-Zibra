@@ -347,8 +347,8 @@ impl LiveSourceRegistry {
         let targets: Vec<Arc<dyn Source>> = self
             .sources
             .iter()
-            .filter(|s| (nsfw_enabled || !s.is_nsfw()) && (pinned_ids.contains(s.id()) || s.priority_rank() <= 6))
-            .take(5)
+            .filter(|s| (nsfw_enabled || !s.is_nsfw()) && (pinned_ids.contains(s.id()) || s.priority_rank() <= 12))
+            .take(16)
             .cloned()
             .collect();
 

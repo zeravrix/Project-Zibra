@@ -1,11 +1,11 @@
 # Zibrax Design System & Architecture Specification
 
 > **Design System Version:** 2.2.0  
-> **Philosophy:** High-Performance, Zero AI-Slop, Native Vector Precision, Kotatsu Material 3 Glass.
+> **Philosophy:** High-Performance, Minimalist Precision, Native Vector Graphics, Kotatsu Material 3 Glass.
 
 ---
 
-## 1. Zero AI-Slop Design Principles
+## 1. Minimalist Native Design Principles
 
 1. **No Clutter Chrome**:
    - The top application bar displays **only the transparent native logo** and essential high-utility actions (Fullscreen toggle, AMOLED high-contrast toggle).

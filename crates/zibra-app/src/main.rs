@@ -267,6 +267,9 @@ struct ZibraApp {
     // Settings Screen states
     settings_section: SettingsSection,
     is_fullscreen: bool,
+    bg_texture: Option<(String, TextureHandle)>,
+    bg_avg_luminance: Option<f32>,
+    custom_bg_input: String,
     custom_domain_key: String,
     custom_domain_val: String,
     custom_cookie_key: String,
@@ -356,6 +359,9 @@ impl ZibraApp {
             pending_scroll_delta: 0.0,
             settings_section: SettingsSection::Appearance,
             is_fullscreen: false,
+            bg_texture: None,
+            bg_avg_luminance: None,
+            custom_bg_input: settings.custom_background_path.clone().unwrap_or_default(),
             custom_domain_key: String::new(),
             custom_domain_val: String::new(),
             custom_cookie_key: String::new(),
@@ -385,6 +391,51 @@ impl ZibraApp {
                 color_img,
                 TextureOptions::LINEAR,
             ));
+        }
+    }
+
+    fn ensure_custom_bg_texture(&mut self, ctx: &egui::Context) {
+        let Some(ref path_str) = self.settings.custom_background_path else {
+            self.bg_texture = None;
+            self.bg_avg_luminance = None;
+            return;
+        };
+
+        let needs_load = match &self.bg_texture {
+            Some((p, _)) => p != path_str,
+            None => true,
+        };
+
+        if needs_load {
+            let path = std::path::Path::new(path_str);
+            if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(img) = image::load_from_memory(&bytes) {
+                    let rgba = img.to_rgba8();
+                    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+                    let raw = rgba.into_raw();
+
+                    let total_px = w * h;
+                    let step = (total_px / 4000).max(1) * 4;
+                    let mut sum_lum = 0.0f32;
+                    let mut count = 0usize;
+                    for i in (0..raw.len()).step_by(step) {
+                        if i + 2 < raw.len() {
+                            let r = raw[i] as f32;
+                            let g = raw[i + 1] as f32;
+                            let b = raw[i + 2] as f32;
+                            sum_lum += (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        self.bg_avg_luminance = Some(sum_lum / (count as f32));
+                    }
+
+                    let color_img = ColorImage::from_rgba_unmultiplied([w, h], &raw);
+                    let tex = ctx.load_texture("zibrax_custom_bg", color_img, TextureOptions::LINEAR);
+                    self.bg_texture = Some((path_str.clone(), tex));
+                }
+            }
         }
     }
 
@@ -642,7 +693,8 @@ impl ZibraApp {
 impl eframe::App for ZibraApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ensure_logo_texture(ctx);
-        let tokens = GlassTokens::from_settings(&self.settings);
+        self.ensure_custom_bg_texture(ctx);
+        let tokens = GlassTokens::from_settings_with_bg(&self.settings, self.bg_avg_luminance);
         apply_kotatsu_visuals(ctx, &tokens);
 
         // Global shortcuts (F11 Fullscreen, Ctrl+B toggle rail)
@@ -670,10 +722,26 @@ impl eframe::App for ZibraApp {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::none()
-                    .fill(tokens.background)
+                    .fill(if self.bg_texture.is_some() { Color32::TRANSPARENT } else { tokens.background })
                     .inner_margin(Margin::symmetric(22.0, 14.0)),
             )
             .show(ctx, |ui| {
+                if let Some((_, ref tex)) = self.bg_texture {
+                    let rect = ui.max_rect();
+                    ui.painter().image(
+                        tex.id(),
+                        rect,
+                        Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(1.0, 1.0)),
+                        Color32::WHITE,
+                    );
+                    let overlay_tint = if tokens.is_dark {
+                        Color32::from_rgba_unmultiplied(10, 13, 18, 120)
+                    } else {
+                        Color32::from_rgba_unmultiplied(245, 247, 252, 125)
+                    };
+                    ui.painter().rect_filled(rect, Rounding::ZERO, overlay_tint);
+                }
+
                 if let Some(manga) = self.selected_manga.clone() {
                     self.render_details_screen(ctx, ui, &tokens, manga);
                     return;
@@ -727,7 +795,7 @@ impl ZibraApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    // Transparent brand logo only (no title text, no AI slop clutter)
+                    // Transparent brand logo only (no title text, no redundant clutter)
                     if let Some(ref logo) = self.logo_texture {
                         ui.add(
                             egui::Image::from_texture(logo)
@@ -3944,6 +4012,50 @@ impl ZibraApp {
 
                                 ui.add_space(14.0);
                                 ui.label(
+                                    RichText::new("CUSTOM APP BACKGROUND & WALLPAPER")
+                                        .size(12.0)
+                                        .strong()
+                                        .color(tokens.primary),
+                                );
+                                ui.label(
+                                    RichText::new(
+                                        "Set custom desktop wallpaper (.png, .jpg, .webp). Colors automatically optimize for image luminance.",
+                                    )
+                                    .size(11.5)
+                                    .color(tokens.text_muted),
+                                );
+                                ui.add_space(8.0);
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.custom_bg_input)
+                                            .hint_text("/path/to/wallpaper.png…")
+                                            .desired_width(380.0),
+                                    );
+                                    if ui.button("Apply Wallpaper").clicked() {
+                                        let trimmed = self.custom_bg_input.trim();
+                                        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+                                            self.settings.custom_background_path = Some(trimmed.to_string());
+                                            self.bg_texture = None;
+                                            let _ = self.settings_store.save(&self.settings);
+                                        }
+                                    }
+                                    if self.settings.custom_background_path.is_some() {
+                                        if ui.button("Clear Wallpaper").clicked() {
+                                            self.settings.custom_background_path = None;
+                                            self.custom_bg_input.clear();
+                                            self.bg_texture = None;
+                                            self.bg_avg_luminance = None;
+                                            let _ = self.settings_store.save(&self.settings);
+                                        }
+                                    }
+                                });
+                                ui.add_space(6.0);
+                                if ui.checkbox(&mut self.settings.auto_optimize_bg, "Auto-Optimize Theme for Background Luminance (contrast & clarity)").changed() {
+                                    let _ = self.settings_store.save(&self.settings);
+                                }
+
+                                ui.add_space(14.0);
+                                ui.label(
                                     RichText::new("INTERFACE LANGUAGE")
                                         .size(12.0)
                                         .strong()
@@ -4620,8 +4732,9 @@ fn load_window_icon() -> Option<egui::IconData> {
 
 fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
-        .with_inner_size([1320.0, 840.0])
-        .with_min_inner_size([920.0, 620.0])
+        .with_inner_size([1240.0, 780.0])
+        .with_min_inner_size([500.0, 360.0])
+        .with_resizable(true)
         .with_title("Zibrax • Native Manga & Manhwa Reader");
     if let Some(icon) = load_window_icon() {
         viewport = viewport.with_icon(Arc::new(icon));

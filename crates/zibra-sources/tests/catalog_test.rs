@@ -18,4 +18,15 @@ fn test_registry_initialization() {
     let registry = LiveSourceRegistry::new();
     assert!(registry.total_count() >= 1600, "Registry must contain at least 1600 catalog sources");
     assert!(registry.get("MANGADEX").is_some(), "Flagship MangaDex must exist");
+    assert!(registry.get("TOONILY").is_some(), "Catalog Toonily must exist");
+}
+
+#[tokio::test]
+async fn test_toonily_catalog_fetch() {
+    let registry = LiveSourceRegistry::new();
+    let toonily = registry.get("TOONILY").expect("TOONILY must exist in registry");
+    if let Ok(page) = toonily.popular(1).await {
+        println!("TOONILY returned {} titles! Sample title: {}", page.items.len(), page.items.first().map(|m| m.title.as_str()).unwrap_or("None"));
+        assert!(!page.items.is_empty(), "Toonily must return items when online");
+    }
 }

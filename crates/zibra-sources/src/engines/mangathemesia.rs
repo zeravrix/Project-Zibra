@@ -1,4 +1,7 @@
-use crate::extractor::{extract_best_image_url, extract_chapter_pages, parse_chapter_number, resolve_url};
+use crate::extractor::{
+    extract_best_image_url, extract_chapter_pages, fetch_html_resilient, parse_chapter_number,
+    resolve_url,
+};
 use crate::{MangaPageResult, Source};
 use async_trait::async_trait;
 use scraper::{Html, Selector};
@@ -37,39 +40,53 @@ impl MangaThemesiaEngine {
     }
 
     async fn fetch_html(&self, url: &str) -> anyhow::Result<String> {
-        let resp = self
-            .client
-            .get(url)
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
-            .header("Referer", format!("{}/", self.base_url))
-            .header("sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
-            .header("sec-ch-ua-mobile", "?0")
-            .header("sec-ch-ua-platform", "\"Windows\"")
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            anyhow::bail!("{} returned HTTP {} at {}", self.name, resp.status(), url);
-        }
-        Ok(resp.text().await?)
+        fetch_html_resilient(&self.client, url, Some(&self.base_url)).await
     }
 
-    async fn fetch_list(&self, url: &str) -> anyhow::Result<MangaPageResult> {
-        let html = self.fetch_html(url).await?;
+    async fn fetch_candidates(&self, candidates: &[String]) -> anyhow::Result<MangaPageResult> {
+        let mut html = String::new();
+        let mut active_url = self.base_url.clone();
+        let mut last_err = None;
+
+        for u in candidates {
+            match self.fetch_html(u).await {
+                Ok(h) if h.len() > 200 => {
+                    html = h;
+                    active_url = u.clone();
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => last_err = Some(e),
+            }
+        }
+
+        if html.is_empty() {
+            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{} returned empty page", self.name)));
+        }
+
         let doc = Html::parse_document(&html);
-        let card_sel = Selector::parse(".bs .bsx, .listupd .bsx, .utao .uta, article.bs").unwrap();
+        let card_sel = Selector::parse(
+            ".bs .bsx, .listupd .bsx, .utao .uta, article.bs, .animposx, .box, .page-item-detail, .manga-item, .col-6, article",
+        ).unwrap();
         let link_sel = Selector::parse("a[href]").unwrap();
-        let title_sel = Selector::parse(".tt, .entry-title, h3, h4").unwrap();
+        let title_sel = Selector::parse(".tt, .entry-title, h3, h4, h5").unwrap();
         let img_sel = Selector::parse("img").unwrap();
 
         let mut items = Vec::new();
         let mut seen = HashSet::new();
 
         for card in doc.select(&card_sel) {
-            let Some(a) = card.select(&link_sel).next() else { continue };
+            let is_anchor = card.value().name() == "a";
+            let anchor_opt = if is_anchor && card.value().attr("href").is_some() {
+                Some(card)
+            } else {
+                card.select(&link_sel).next()
+            };
+            let Some(a) = anchor_opt else { continue };
             let Some(href) = a.value().attr("href") else { continue };
-            let Some(full_url) = resolve_url(url, href) else { continue };
-            if !seen.insert(full_url.clone()) {
+            let Some(full_url) = resolve_url(&active_url, href) else { continue };
+            let clean = full_url.trim_end_matches('/');
+            if clean == self.base_url || !seen.insert(full_url.clone()) {
                 continue;
             }
             let title = card
@@ -79,12 +96,31 @@ impl MangaThemesiaEngine {
                 .filter(|s| !s.is_empty())
                 .or_else(|| a.value().attr("title").map(|s| s.trim().to_string()))
                 .unwrap_or_else(|| "Manhwa".to_string());
-            let cover = card.select(&img_sel).next().and_then(|i| extract_best_image_url(i, url));
+            let cover = card.select(&img_sel).next().and_then(|i| extract_best_image_url(i, &active_url));
             let mut m = Manga::new(full_url, title, &self.id);
             m.cover_url = cover;
             m.is_manhwa = true;
             m.enrich_manhwa_tags();
             items.push(m);
+        }
+
+        if items.is_empty() {
+            let direct_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/komik/']").unwrap();
+            for a in doc.select(&direct_sel) {
+                let Some(href) = a.value().attr("href") else { continue };
+                let Some(full_url) = resolve_url(&active_url, href) else { continue };
+                if full_url.trim_end_matches('/') == self.base_url || !seen.insert(full_url.clone()) {
+                    continue;
+                }
+                let title = a.value().attr("title")
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| a.text().collect::<String>().trim().to_string());
+                if title.is_empty() { continue; }
+                let mut m = Manga::new(full_url, title, &self.id);
+                m.is_manhwa = true;
+                items.push(m);
+            }
         }
 
         Ok(MangaPageResult {
@@ -104,18 +140,57 @@ impl Source for MangaThemesiaEngine {
     fn tags(&self) -> &[SourceTag] { &self.tags }
 
     async fn popular(&self, page: u32) -> anyhow::Result<MangaPageResult> {
-        let url = format!("{}/manga/?page={}&order=popular", self.base_url, page.max(1));
-        self.fetch_list(&url).await
+        let p = page.max(1);
+        let candidates = if p <= 1 {
+            vec![
+                format!("{}/manga/?order=popular", self.base_url),
+                format!("{}/manga/?page=1&order=popular", self.base_url),
+                format!("{}/series/?order=popular", self.base_url),
+                format!("{}/komik/?order=popular", self.base_url),
+                format!("{}/manga/", self.base_url),
+                format!("{}/series/", self.base_url),
+                format!("{}/", self.base_url),
+            ]
+        } else {
+            vec![
+                format!("{}/manga/?page={}&order=popular", self.base_url, p),
+                format!("{}/manga/page/{}/?order=popular", self.base_url, p),
+                format!("{}/series/?page={}&order=popular", self.base_url, p),
+                format!("{}/page/{}/", self.base_url, p),
+            ]
+        };
+        self.fetch_candidates(&candidates).await
     }
 
     async fn latest(&self, page: u32) -> anyhow::Result<MangaPageResult> {
-        let url = format!("{}/manga/?page={}&order=update", self.base_url, page.max(1));
-        self.fetch_list(&url).await
+        let p = page.max(1);
+        let candidates = if p <= 1 {
+            vec![
+                format!("{}/manga/?order=update", self.base_url),
+                format!("{}/manga/?page=1&order=update", self.base_url),
+                format!("{}/series/?order=update", self.base_url),
+                format!("{}/manga/", self.base_url),
+                format!("{}/", self.base_url),
+            ]
+        } else {
+            vec![
+                format!("{}/manga/?page={}&order=update", self.base_url, p),
+                format!("{}/series/?page={}&order=update", self.base_url, p),
+                format!("{}/page/{}/", self.base_url, p),
+            ]
+        };
+        self.fetch_candidates(&candidates).await
     }
 
     async fn search(&self, page: u32, query: &str) -> anyhow::Result<MangaPageResult> {
-        let url = format!("{}/page/{}/?s={}", self.base_url, page.max(1), urlencoding::encode(query.trim()));
-        self.fetch_list(&url).await
+        let p = page.max(1);
+        let enc = urlencoding::encode(query.trim());
+        let candidates = vec![
+            format!("{}/page/{}/?s={}", self.base_url, p, enc),
+            format!("{}/?s={}", self.base_url, enc),
+            format!("{}/manga/?s={}", self.base_url, enc),
+        ];
+        self.fetch_candidates(&candidates).await
     }
 
     async fn details(&self, manga: &Manga) -> anyhow::Result<Manga> {

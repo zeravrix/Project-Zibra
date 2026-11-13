@@ -1,4 +1,4 @@
-# CLAUDE.md — ZERAVRIX / ZIBRA Design System & Architecture Rules
+# ARCHITECTURE.md — ZERAVRIX / Zibrax Design System & Architecture Rules
 
 > Authoritative instructions for integrating Figma designs via MCP, maintaining the pure Rust desktop application, and adhering to Blueprint v2.0 and the Bug Audit / 1,000-Source Roadmap.
 

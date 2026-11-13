@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="Project ZIBRA Logo" width="140" />
+<img src="assets/logo.png" alt="Zibrax Logo" width="140" />
 
-# ZIBRA (ZERAVRIX Rust Edition)
+# Zibrax (ZERAVRIX Rust Edition)
 
 **A 100% Native Rust Manga, Manhwa & Webtoon Desktop Reader for Windows & Linux**
 

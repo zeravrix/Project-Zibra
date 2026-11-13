@@ -40,12 +40,16 @@ impl ZeistEngine {
         let resp = self
             .client
             .get(url)
-            .header("Accept", "application/json")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8")
             .header("Referer", format!("{}/", self.base_url))
+            .header("sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-ch-ua-platform", "\"Windows\"")
             .send()
             .await?;
         if !resp.status().is_success() {
-            anyhow::bail!("{} returned HTTP {}", self.name, resp.status());
+            anyhow::bail!("{} returned HTTP {} at {}", self.name, resp.status(), url);
         }
         Ok(resp.json::<Value>().await?)
     }
