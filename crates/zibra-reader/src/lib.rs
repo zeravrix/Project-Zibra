@@ -1,21 +1,25 @@
+use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 use moka::sync::Cache;
+use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
-use zibra_core::{is_html_or_challenge, MangaPage};
+use std::time::{Duration, Instant};
+use zibra_core::{is_html_or_challenge, ChapterArchive, MangaPage};
 
 pub const MAX_TILE_HEIGHT: u32 = 2048;
 pub const MAX_SAFE_IMAGE_BYTES: u64 = 256 * 1024 * 1024; // 256 MB guard against decompression bombs
 pub const MAX_SAFE_IMAGE_WIDTH: usize = 16384;
 pub const MAX_SAFE_IMAGE_HEIGHT: usize = 65536;
 
+const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
 struct InFlightGuard {
     url: String,
-    set: Arc<parking_lot::Mutex<HashSet<String>>>,
+    set: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Drop for InFlightGuard {
@@ -51,12 +55,21 @@ impl SlicedPage {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum PageLoadStatus {
+    Idle,
+    Loading,
+    Ready(Arc<SlicedPage>),
+    Failed(String),
+}
+
 #[derive(Clone)]
 pub struct ReaderPagePipeline {
     client: reqwest::Client,
     ram_cache: Cache<String, Arc<SlicedPage>>,
     disk_cache_dir: PathBuf,
-    in_flight: Arc<parking_lot::Mutex<HashSet<String>>>,
+    in_flight: Arc<Mutex<HashSet<String>>>,
+    failed_urls: Arc<Mutex<HashMap<String, (String, Instant)>>>,
     decode_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
@@ -69,12 +82,14 @@ impl ReaderPagePipeline {
         let ram_cache = Cache::builder()
             .max_capacity(max_bytes)
             .weigher(|_k: &String, v: &Arc<SlicedPage>| -> u32 { v.byte_weight() })
-            .time_to_idle(Duration::from_secs(600))
+            .time_to_idle(Duration::from_secs(900))
             .build();
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .connect_timeout(Duration::from_secs(12))
+            .cookie_store(true)
+            .user_agent(DEFAULT_USER_AGENT)
             .build()
             .unwrap_or_default();
 
@@ -82,8 +97,9 @@ impl ReaderPagePipeline {
             client,
             ram_cache,
             disk_cache_dir,
-            in_flight: Arc::new(parking_lot::Mutex::new(HashSet::new())),
-            decode_semaphore: Arc::new(tokio::sync::Semaphore::new(2)),
+            in_flight: Arc::new(Mutex::new(HashSet::new())),
+            failed_urls: Arc::new(Mutex::new(HashMap::new())),
+            decode_semaphore: Arc::new(tokio::sync::Semaphore::new(3)),
         }
     }
 
@@ -95,8 +111,40 @@ impl ReaderPagePipeline {
         self.ram_cache.get(image_url)
     }
 
+    pub fn get_status(&self, image_url: &str) -> PageLoadStatus {
+        if let Some(cached) = self.ram_cache.get(image_url) {
+            return PageLoadStatus::Ready(cached);
+        }
+        if self.in_flight.lock().contains(image_url) {
+            return PageLoadStatus::Loading;
+        }
+        if let Some((err, ts)) = self.failed_urls.lock().get(image_url) {
+            if ts.elapsed() < Duration::from_secs(60) {
+                return PageLoadStatus::Failed(err.clone());
+            }
+        }
+        PageLoadStatus::Idle
+    }
+
+    pub fn clear_failed(&self, image_url: &str) {
+        self.failed_urls.lock().remove(image_url);
+    }
+
+    pub fn clear_all_failed(&self) {
+        self.failed_urls.lock().clear();
+    }
+
+    pub fn clear_caches(&self) {
+        self.ram_cache.invalidate_all();
+        self.failed_urls.lock().clear();
+        if self.disk_cache_dir.is_dir() {
+            let _ = fs::remove_dir_all(&self.disk_cache_dir);
+            let _ = fs::create_dir_all(&self.disk_cache_dir);
+        }
+    }
+
     pub fn prune_except(&self, active_urls: &[String]) {
-        let keep: std::collections::HashSet<&String> = active_urls.iter().collect();
+        let keep: HashSet<&String> = active_urls.iter().collect();
         for (k, _) in self.ram_cache.iter() {
             if !keep.contains(&k.as_ref()) {
                 self.ram_cache.invalidate(k.as_ref());
@@ -113,7 +161,7 @@ impl ReaderPagePipeline {
             return Ok(cached);
         }
 
-        // Single-flight coordinator: join/skip if already in-flight
+        // Single-flight coordinator
         let _guard = {
             let mut lock = self.in_flight.lock();
             if lock.contains(&page.image_url) {
@@ -126,11 +174,29 @@ impl ReaderPagePipeline {
             }
         };
 
+        let res = self.load_and_slice_inner(page, seam_trim_px).await;
+        match &res {
+            Ok(_) => {
+                self.failed_urls.lock().remove(&page.image_url);
+            }
+            Err(e) => {
+                self.failed_urls
+                    .lock()
+                    .insert(page.image_url.clone(), (e.to_string(), Instant::now()));
+            }
+        }
+        res
+    }
+
+    async fn load_and_slice_inner(
+        &self,
+        page: &MangaPage,
+        seam_trim_px: u32,
+    ) -> anyhow::Result<Arc<SlicedPage>> {
         let raw_bytes = self.fetch_raw_bytes(page).await?;
         let page_index = page.index;
         let url_key = page.image_url.clone();
 
-        // Check dimensions safely before full decompression (P0-02 checked arithmetic)
         if let Ok(size) = imagesize::blob_size(&raw_bytes) {
             let estimated_bytes = (size.width as u64)
                 .saturating_mul(size.height as u64)
@@ -147,7 +213,6 @@ impl ReaderPagePipeline {
             }
         }
 
-        // Bounded CPU decode permits
         let permit = self.decode_semaphore.clone().acquire_owned().await?;
 
         let sliced = tokio::task::spawn_blocking(move || -> anyhow::Result<SlicedPage> {
@@ -163,7 +228,39 @@ impl ReaderPagePipeline {
     }
 
     async fn fetch_raw_bytes(&self, page: &MangaPage) -> anyhow::Result<Vec<u8>> {
-        let key_hash = hex::encode(Sha256::digest(page.image_url.as_bytes()));
+        let url_trimmed = page.image_url.trim();
+        if url_trimmed.is_empty() {
+            anyhow::bail!("Empty page image URL");
+        }
+
+        // 1. Offline CBZ archive entry: cbz://<archive_path>!<entry_name>
+        if let Some(rest) = url_trimmed.strip_prefix("cbz://") {
+            if let Some((arch_str, entry_name)) = rest.split_once('!') {
+                let archive_path = PathBuf::from(arch_str);
+                let entry = entry_name.to_string();
+                return tokio::task::spawn_blocking(move || {
+                    ChapterArchive::read_entry(&archive_path, &entry)
+                })
+                .await?;
+            }
+        }
+
+        // 2. Local file:// URI or direct filesystem path
+        if let Some(path_str) = url_trimmed.strip_prefix("file://") {
+            let p = PathBuf::from(path_str);
+            if p.is_file() {
+                return Ok(fs::read(&p)?);
+            }
+        }
+        if !url_trimmed.starts_with("http://") && !url_trimmed.starts_with("https://") {
+            let p = PathBuf::from(url_trimmed);
+            if p.is_file() {
+                return Ok(fs::read(&p)?);
+            }
+        }
+
+        // 3. On-disk cache lookup
+        let key_hash = hex::encode(Sha256::digest(url_trimmed.as_bytes()));
         let disk_file = self.disk_cache_dir.join(format!("{}.bin", key_hash));
 
         if disk_file.is_file() {
@@ -174,26 +271,295 @@ impl ReaderPagePipeline {
             }
         }
 
-        let mut req = self.client.get(&page.image_url);
-        if let Some(ref referer) = page.referer {
-            req = req.header("Referer", referer);
+        // 4. Remote HTTP fetch with automatic Referer fallback strategies
+        let origin_referer = extract_origin_referer(url_trimmed);
+        let mut referer_candidates: Vec<Option<String>> = Vec::new();
+        if let Some(ref r) = page.referer {
+            if !r.trim().is_empty() {
+                referer_candidates.push(Some(r.clone()));
+            }
         }
-        for (k, v) in &page.headers {
-            req = req.header(k, v);
+        if let Some(orig) = origin_referer {
+            if !referer_candidates.iter().any(|c| c.as_deref() == Some(orig.as_str())) {
+                referer_candidates.push(Some(orig));
+            }
+        }
+        referer_candidates.push(None);
+
+        let mut last_err = anyhow::anyhow!("Failed to fetch image {}", url_trimmed);
+
+        for ref_opt in referer_candidates {
+            let mut req = self
+                .client
+                .get(url_trimmed)
+                .header(
+                    "Accept",
+                    "image/webp,image/png,image/jpeg,image/gif,image/avif,image/*,*/*;q=0.8",
+                )
+                .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
+
+            for (k, v) in &page.headers {
+                if !k.eq_ignore_ascii_case("referer") {
+                    req = req.header(k, v);
+                }
+            }
+            if let Some(ref r) = ref_opt {
+                req = req.header("Referer", r);
+            }
+
+            match req.send().await {
+                Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+                    Ok(b) if b.len() > 64 && !is_html_or_challenge(&b) => {
+                        let vec_b = b.to_vec();
+                        let tmp_file = self.disk_cache_dir.join(format!("{}.bin.part", key_hash));
+                        if fs::write(&tmp_file, &vec_b).is_ok() {
+                            let _ = fs::rename(&tmp_file, &disk_file);
+                        }
+                        return Ok(vec_b);
+                    }
+                    Ok(b) if is_html_or_challenge(&b) => {
+                        last_err = anyhow::anyhow!("Cloudflare/HTML challenge returned for {}", url_trimmed);
+                    }
+                    Ok(_) => {
+                        last_err = anyhow::anyhow!("Empty or truncated image response for {}", url_trimmed);
+                    }
+                    Err(e) => {
+                        last_err = e.into();
+                    }
+                },
+                Ok(resp) => {
+                    last_err = anyhow::anyhow!("HTTP {} fetching page {}", resp.status(), url_trimmed);
+                }
+                Err(e) => {
+                    last_err = e.into();
+                }
+            }
         }
 
-        let resp = req.send().await?;
-        if !resp.status().is_success() {
-            anyhow::bail!("HTTP {} fetching page {}", resp.status(), page.image_url);
-        }
-        let bytes = resp.bytes().await?.to_vec();
-        if is_html_or_challenge(&bytes) {
-            anyhow::bail!("HTML response returned instead of image");
-        }
-
-        let _ = fs::write(&disk_file, &bytes);
-        Ok(bytes)
+        Err(last_err)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct DecodedCover {
+    pub width: u32,
+    pub height: u32,
+    pub rgba_bytes: Arc<Vec<u8>>,
+}
+
+impl DecodedCover {
+    pub fn byte_weight(&self) -> u32 {
+        (self.rgba_bytes.len() as u32).max(1)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CoverStatus {
+    Idle,
+    Loading,
+    Ready(Arc<DecodedCover>),
+    Failed,
+}
+
+#[derive(Clone)]
+pub struct CoverImageCache {
+    client: reqwest::Client,
+    ram_cache: Cache<String, Arc<DecodedCover>>,
+    disk_cache_dir: PathBuf,
+    in_flight: Arc<Mutex<HashSet<String>>>,
+    failed_urls: Arc<Mutex<HashMap<String, Instant>>>,
+    fetch_semaphore: Arc<tokio::sync::Semaphore>,
+}
+
+impl CoverImageCache {
+    pub fn new(app_dir: &Path) -> Self {
+        let disk_cache_dir = app_dir.join("cache").join("covers");
+        let _ = fs::create_dir_all(&disk_cache_dir);
+
+        // 64 MB RAM cache for cover thumbnails & source icons
+        let ram_cache = Cache::builder()
+            .max_capacity(64 * 1024 * 1024)
+            .weigher(|_k: &String, v: &Arc<DecodedCover>| -> u32 { v.byte_weight() })
+            .time_to_idle(Duration::from_secs(1800))
+            .build();
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(18))
+            .connect_timeout(Duration::from_secs(10))
+            .cookie_store(true)
+            .user_agent(DEFAULT_USER_AGENT)
+            .build()
+            .unwrap_or_default();
+
+        Self {
+            client,
+            ram_cache,
+            disk_cache_dir,
+            in_flight: Arc::new(Mutex::new(HashSet::new())),
+            failed_urls: Arc::new(Mutex::new(HashMap::new())),
+            fetch_semaphore: Arc::new(tokio::sync::Semaphore::new(8)),
+        }
+    }
+
+    pub fn get_status(&self, url: &str) -> CoverStatus {
+        let trimmed = url.trim();
+        if trimmed.is_empty() {
+            return CoverStatus::Failed;
+        }
+        if let Some(cached) = self.ram_cache.get(trimmed) {
+            return CoverStatus::Ready(cached);
+        }
+        if self.in_flight.lock().contains(trimmed) {
+            return CoverStatus::Loading;
+        }
+        if let Some(ts) = self.failed_urls.lock().get(trimmed) {
+            if ts.elapsed() < Duration::from_secs(90) {
+                return CoverStatus::Failed;
+            }
+        }
+        CoverStatus::Idle
+    }
+
+    pub fn clear_caches(&self) {
+        self.ram_cache.invalidate_all();
+        self.failed_urls.lock().clear();
+        if self.disk_cache_dir.is_dir() {
+            let _ = fs::remove_dir_all(&self.disk_cache_dir);
+            let _ = fs::create_dir_all(&self.disk_cache_dir);
+        }
+    }
+
+    pub async fn fetch_and_decode(&self, url: &str, max_dim: u32) -> anyhow::Result<Arc<DecodedCover>> {
+        let trimmed = url.trim().to_string();
+        if trimmed.is_empty() {
+            anyhow::bail!("Empty cover URL");
+        }
+        if let Some(cached) = self.ram_cache.get(&trimmed) {
+            return Ok(cached);
+        }
+
+        let _guard = {
+            let mut lock = self.in_flight.lock();
+            if lock.contains(&trimmed) {
+                return Err(anyhow::anyhow!("Cover fetch already in flight"));
+            }
+            lock.insert(trimmed.clone());
+            InFlightGuard {
+                url: trimmed.clone(),
+                set: self.in_flight.clone(),
+            }
+        };
+
+        let res = self.fetch_and_decode_inner(&trimmed, max_dim).await;
+        match &res {
+            Ok(_) => {
+                self.failed_urls.lock().remove(&trimmed);
+            }
+            Err(_) => {
+                self.failed_urls.lock().insert(trimmed, Instant::now());
+            }
+        }
+        res
+    }
+
+    async fn fetch_and_decode_inner(&self, url: &str, max_dim: u32) -> anyhow::Result<Arc<DecodedCover>> {
+        let _permit = self.fetch_semaphore.acquire().await?;
+        let raw_bytes = self.fetch_cover_bytes(url).await?;
+        let url_key = url.to_string();
+        let target_max = max_dim.clamp(64, 720);
+
+        let decoded = tokio::task::spawn_blocking(move || -> anyhow::Result<DecodedCover> {
+            let img = image::load_from_memory(&raw_bytes)?;
+            let (w, h) = img.dimensions();
+            let resized = if w > target_max || h > (target_max * 3 / 2) {
+                img.resize(target_max, target_max * 3 / 2, FilterType::Triangle)
+            } else {
+                img
+            };
+            let (rw, rh) = resized.dimensions();
+            let rgba = resized.to_rgba8().into_raw();
+            Ok(DecodedCover {
+                width: rw.max(1),
+                height: rh.max(1),
+                rgba_bytes: Arc::new(rgba),
+            })
+        })
+        .await??;
+
+        let arc_cov = Arc::new(decoded);
+        self.ram_cache.insert(url_key, arc_cov.clone());
+        Ok(arc_cov)
+    }
+
+    async fn fetch_cover_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
+        if let Some(path_str) = url.strip_prefix("file://") {
+            let p = PathBuf::from(path_str);
+            if p.is_file() {
+                return Ok(fs::read(&p)?);
+            }
+        }
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            let p = PathBuf::from(url);
+            if p.is_file() {
+                return Ok(fs::read(&p)?);
+            }
+        }
+
+        let key_hash = hex::encode(Sha256::digest(url.as_bytes()));
+        let disk_file = self.disk_cache_dir.join(format!("{}.cov", key_hash));
+
+        if disk_file.is_file() {
+            if let Ok(bytes) = fs::read(&disk_file) {
+                if bytes.len() > 32 && !is_html_or_challenge(&bytes) {
+                    return Ok(bytes);
+                }
+            }
+        }
+
+        let origin_ref = extract_origin_referer(url).unwrap_or_else(|| "https://mangadex.org/".to_string());
+        let candidates = [Some(origin_ref), None];
+
+        for ref_opt in candidates {
+            let mut req = self
+                .client
+                .get(url)
+                .header("Accept", "image/webp,image/png,image/jpeg,image/gif,image/x-icon,image/*,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
+            if let Some(ref r) = ref_opt {
+                req = req.header("Referer", r);
+            }
+
+            if let Ok(resp) = req.send().await {
+                if resp.status().is_success() {
+                    if let Ok(bytes) = resp.bytes().await {
+                        if bytes.len() > 32 && !is_html_or_challenge(&bytes) {
+                            let vec_b = bytes.to_vec();
+                            let tmp = self.disk_cache_dir.join(format!("{}.cov.part", key_hash));
+                            if fs::write(&tmp, &vec_b).is_ok() {
+                                let _ = fs::rename(&tmp, &disk_file);
+                            }
+                            return Ok(vec_b);
+                        }
+                    }
+                }
+            }
+        }
+
+        anyhow::bail!("Failed to fetch cover image from {}", url)
+    }
+}
+
+fn extract_origin_referer(url: &str) -> Option<String> {
+    if let Some(scheme_idx) = url.find("://") {
+        let after_scheme = &url[scheme_idx + 3..];
+        let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+        let host = &after_scheme[..host_end];
+        if !host.is_empty() {
+            let scheme = &url[..scheme_idx];
+            return Some(format!("{}://{}/", scheme, host));
+        }
+    }
+    None
 }
 
 pub fn slice_dynamic_image(

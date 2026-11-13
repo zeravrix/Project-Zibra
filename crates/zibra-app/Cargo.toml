@@ -18,6 +18,7 @@ tokio.workspace = true
 eframe.workspace = true
 egui.workspace = true
 egui_extras.workspace = true
+image.workspace = true
 parking_lot.workspace = true
 dirs.workspace = true
 chrono.workspace = true

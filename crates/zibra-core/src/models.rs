@@ -22,13 +22,14 @@ impl Manga {
     pub fn new(id: impl Into<String>, title: impl Into<String>, source_id: impl Into<String>) -> Self {
         let id_str = id.into();
         let title_str = title.into();
+        let src_str = source_id.into();
         let is_manhwa = Self::detect_manhwa(&title_str, &id_str, &[]);
         Self {
             id: id_str.clone(),
             title: title_str,
             cover_url: None,
             description: String::new(),
-            source_id: source_id.into(),
+            source_id: src_str,
             author: None,
             artist: None,
             genres: if is_manhwa {
@@ -68,7 +69,22 @@ impl Manga {
             }
         }
     }
+
+    pub fn is_nsfw(&self) -> bool {
+        let keywords = [
+            "18+", "+18", "nsfw", "hentai", "adult", "erotica", "smut", "porn", "xxx",
+            "ecchi", "mature", "milf", "uncensored", "doujinshi", "للكبار", "+18",
+        ];
+        let combined = format!(
+            "{} {} {}",
+            self.title.to_lowercase(),
+            self.url.as_deref().unwrap_or(&self.id).to_lowercase(),
+            self.genres.join(" ").to_lowercase()
+        );
+        keywords.iter().any(|k| combined.contains(k))
+    }
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Chapter {
@@ -177,6 +193,7 @@ pub enum SourceTag {
     LocalStorage,
     CloudflareProtected,
     EcdhEncrypted,
+    Nsfw,
 }
 
 impl SourceTag {
@@ -201,6 +218,7 @@ impl SourceTag {
             SourceTag::LocalStorage => "LOCAL",
             SourceTag::CloudflareProtected => "CF-GUARD",
             SourceTag::EcdhEncrypted => "ECDH-AES",
+            SourceTag::Nsfw => "18+ NSFW",
         }
     }
 
@@ -213,6 +231,7 @@ impl SourceTag {
             SourceTag::VerifiedWorking => (129, 230, 165),
             SourceTag::Popular => (255, 177, 200),
             SourceTag::EcdhEncrypted => (211, 187, 253),
+            SourceTag::Nsfw => (255, 82, 82),
             _ => (188, 199, 220),
         }
     }
@@ -267,4 +286,12 @@ pub struct FeedItem {
     pub manga: Manga,
     pub chapter: Chapter,
     pub is_read: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepositorySourceDescriptor {
+    pub id: String,
+    pub name: String,
+    pub language: String,
+    pub home_url: String,
 }

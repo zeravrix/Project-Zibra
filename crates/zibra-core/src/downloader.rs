@@ -49,6 +49,10 @@ impl DesktopDownloader {
         }
     }
 
+    pub fn downloads_dir(&self) -> &Path {
+        &self.downloads_dir
+    }
+
     pub fn jobs(&self) -> Vec<DownloadJobState> {
         self.jobs.read().clone()
     }
@@ -63,14 +67,42 @@ impl DesktopDownloader {
                 continue;
             }
             let manga_title = m_entry.file_name().to_string_lossy().to_string();
+            if manga_title.starts_with('.') {
+                continue;
+            }
             if let Ok(ch_entries) = fs::read_dir(m_entry.path()) {
                 for ch_entry in ch_entries.flatten() {
                     let path = ch_entry.path();
                     if path.extension().and_then(|e| e.to_str()) == Some("cbz") {
-                        let ch_title = path
+                        let mut manga_id = manga_title.clone();
+                        let mut chapter_id = path.to_string_lossy().to_string();
+                        let mut ch_title = path
                             .file_stem()
                             .map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "Chapter".to_string());
+                        let mut source_id = "LOCAL_FILES".to_string();
+                        let mut cover_url = None;
+
+                        if let Ok(manifest_bytes) = ChapterArchive::read_entry(&path, "zibra.json") {
+                            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&manifest_bytes) {
+                                if let Some(mid) = val.get("mangaId").and_then(|v| v.as_str()) {
+                                    manga_id = mid.to_string();
+                                }
+                                if let Some(cid) = val.get("chapterId").and_then(|v| v.as_str()) {
+                                    chapter_id = cid.to_string();
+                                }
+                                if let Some(ct) = val.get("chapterTitle").and_then(|v| v.as_str()) {
+                                    ch_title = ct.to_string();
+                                }
+                                if let Some(sid) = val.get("sourceId").and_then(|v| v.as_str()) {
+                                    source_id = sid.to_string();
+                                }
+                                if let Some(cov) = val.get("mangaCoverUrl").and_then(|v| v.as_str()) {
+                                    cover_url = Some(cov.to_string());
+                                }
+                            }
+                        }
+
                         let page_count = ChapterArchive::image_entries(&path)
                             .map(|v| v.len())
                             .unwrap_or(0);
@@ -82,11 +114,11 @@ impl DesktopDownloader {
                             .map(|d| d.as_millis() as i64)
                             .unwrap_or(0);
                         results.push(DownloadedChapter {
-                            manga_id: manga_title.clone(),
-                            source_id: "LOCAL".to_string(),
+                            manga_id,
+                            source_id,
                             manga_title: manga_title.clone(),
-                            manga_cover_url: None,
-                            chapter_id: path.to_string_lossy().to_string(),
+                            manga_cover_url: cover_url,
+                            chapter_id,
                             chapter_title: ch_title,
                             number: None,
                             directory: m_entry.path(),
@@ -100,6 +132,30 @@ impl DesktopDownloader {
         }
         results.sort_by(|a, b| b.downloaded_at.cmp(&a.downloaded_at));
         results
+    }
+
+    pub fn downloaded_for_manga(&self, manga_id: &str) -> Vec<DownloadedChapter> {
+        self.list_downloaded()
+            .into_iter()
+            .filter(|d| d.manga_id == manga_id)
+            .collect()
+    }
+
+    pub fn local_pages(&self, dl: &DownloadedChapter) -> Vec<MangaPage> {
+        let Some(ref archive_path) = dl.archive_path else {
+            return Vec::new();
+        };
+        let Ok(entries) = ChapterArchive::image_entries(archive_path) else {
+            return Vec::new();
+        };
+        entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, entry)| {
+                let uri = format!("cbz://{}!{}", archive_path.to_string_lossy(), entry);
+                MangaPage::new(idx, uri, None)
+            })
+            .collect()
     }
 
     pub async fn download_chapter(
@@ -134,37 +190,71 @@ impl DesktopDownloader {
         let total = pages.len();
         let mut archive_images = Vec::with_capacity(total);
 
-        for (idx, page) in pages.into_iter().enumerate() {
-            let _permit = self.semaphore.acquire().await?;
-            let bytes = self.fetch_page_with_retry(&page).await?;
+        let completed_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut join_handles = Vec::with_capacity(total);
 
-            if is_html_or_challenge(&bytes) {
-                self.update_status(
-                    &chapter.id,
-                    DownloadStatus::Failed {
-                        error: format!("Page {} returned an HTML/Cloudflare block page", idx + 1),
+        for (idx, page) in pages.into_iter().enumerate() {
+            let dl_self = self.clone();
+            let sem = self.semaphore.clone();
+            let temp_dir_clone = temp_dir.clone();
+            let ch_id = chapter.id.clone();
+            let counter = completed_counter.clone();
+
+            join_handles.push(tokio::spawn(async move {
+                let _permit = sem.acquire().await?;
+                let bytes = dl_self.fetch_page_with_retry(&page).await?;
+
+                if is_html_or_challenge(&bytes) {
+                    anyhow::bail!("Page {} returned an HTML challenge instead of image bytes", idx + 1);
+                }
+
+                let ext = detect_image_ext(&bytes);
+                let entry_name = format!("{:04}.{}", idx + 1, ext);
+                let file_path = temp_dir_clone.join(&entry_name);
+                fs::write(&file_path, &bytes)?;
+
+                let done = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                dl_self.update_status(
+                    &ch_id,
+                    DownloadStatus::Downloading {
+                        completed_pages: done,
+                        total_pages: total,
                     },
                 );
-                anyhow::bail!("Page {} returned an HTML challenge instead of image bytes", idx + 1);
+
+                Ok::<(usize, ArchiveImage), anyhow::Error>((
+                    idx,
+                    ArchiveImage {
+                        entry_name,
+                        file_path,
+                    },
+                ))
+            }));
+        }
+
+        let mut indexed_images = Vec::with_capacity(total);
+        for handle in join_handles {
+            match handle.await {
+                Ok(Ok(pair)) => indexed_images.push(pair),
+                Ok(Err(e)) => {
+                    self.update_status(
+                        &chapter.id,
+                        DownloadStatus::Failed {
+                            error: e.to_string(),
+                        },
+                    );
+                    return Err(e);
+                }
+                Err(join_err) => {
+                    let msg = format!("Download worker panicked: {}", join_err);
+                    self.update_status(&chapter.id, DownloadStatus::Failed { error: msg.clone() });
+                    anyhow::bail!(msg);
+                }
             }
-
-            let ext = detect_image_ext(&bytes);
-            let entry_name = format!("{:04}.{}", idx + 1, ext);
-            let file_path = temp_dir.join(&entry_name);
-            fs::write(&file_path, &bytes)?;
-
-            archive_images.push(ArchiveImage {
-                entry_name,
-                file_path,
-            });
-
-            self.update_status(
-                &chapter.id,
-                DownloadStatus::Downloading {
-                    completed_pages: idx + 1,
-                    total_pages: total,
-                },
-            );
+        }
+        indexed_images.sort_by_key(|(idx, _)| *idx);
+        for (_, img) in indexed_images {
+            archive_images.push(img);
         }
 
         let target_cbz = manga_dir.join(format!("{}.cbz", safe_chapter));
@@ -176,7 +266,9 @@ impl DesktopDownloader {
         );
         let manifest = serde_json::json!({
             "mangaId": manga.id,
+            "sourceId": manga.source_id,
             "mangaTitle": manga.title,
+            "mangaCoverUrl": manga.cover_url,
             "chapterId": chapter.id,
             "chapterTitle": chapter.title,
             "downloadedAt": Utc::now().timestamp_millis(),
@@ -198,27 +290,55 @@ impl DesktopDownloader {
 
     async fn fetch_page_with_retry(&self, page: &MangaPage) -> anyhow::Result<Vec<u8>> {
         let mut last_err = None;
+        let origin_referer = url::Url::parse(&page.image_url)
+            .ok()
+            .and_then(|u| u.host_str().map(|h| format!("{}://{}/", u.scheme(), h)));
+
+        let mut referer_candidates: Vec<Option<String>> = Vec::new();
+        if let Some(ref r) = page.referer {
+            if !r.trim().is_empty() {
+                referer_candidates.push(Some(r.clone()));
+            }
+        }
+        if let Some(orig) = origin_referer {
+            if !referer_candidates.iter().any(|c| c.as_deref() == Some(orig.as_str())) {
+                referer_candidates.push(Some(orig));
+            }
+        }
+        referer_candidates.push(None);
+
         for attempt in 0..3 {
             if attempt > 0 {
                 tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await;
             }
-            let mut req = self.client.get(&page.image_url);
-            if let Some(ref referer) = page.referer {
-                req = req.header("Referer", referer);
-            }
-            for (k, v) in &page.headers {
-                req = req.header(k, v);
-            }
-            match req.send().await {
-                Ok(resp) if resp.status().is_success() => match resp.bytes().await {
-                    Ok(b) if b.len() >= 64 => return Ok(b.to_vec()),
-                    Ok(_) => last_err = Some(anyhow::anyhow!("Image payload too small")),
-                    Err(e) => last_err = Some(e.into()),
-                },
-                Ok(resp) => {
-                    last_err = Some(anyhow::anyhow!("HTTP {} for {}", resp.status(), page.image_url));
+            for ref_opt in &referer_candidates {
+                let mut req = self
+                    .client
+                    .get(&page.image_url)
+                    .header(
+                        "Accept",
+                        "image/webp,image/png,image/jpeg,image/gif,image/avif,image/*,*/*;q=0.8",
+                    )
+                    .header("Accept-Language", "en-US,en;q=0.9,ar;q=0.8");
+                for (k, v) in &page.headers {
+                    if !k.eq_ignore_ascii_case("referer") {
+                        req = req.header(k, v);
+                    }
                 }
-                Err(e) => last_err = Some(e.into()),
+                if let Some(ref r) = ref_opt {
+                    req = req.header("Referer", r);
+                }
+                match req.send().await {
+                    Ok(resp) if resp.status().is_success() => match resp.bytes().await {
+                        Ok(b) if b.len() >= 64 && !is_html_or_challenge(&b) => return Ok(b.to_vec()),
+                        Ok(_) => last_err = Some(anyhow::anyhow!("Image payload too small or HTML challenge")),
+                        Err(e) => last_err = Some(e.into()),
+                    },
+                    Ok(resp) => {
+                        last_err = Some(anyhow::anyhow!("HTTP {} for {}", resp.status(), page.image_url));
+                    }
+                    Err(e) => last_err = Some(e.into()),
+                }
             }
         }
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to download page")))

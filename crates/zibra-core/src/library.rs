@@ -2,7 +2,7 @@ use crate::models::{Chapter, Manga, ReadingProgress};
 use chrono::Utc;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -66,6 +66,16 @@ impl LibraryStore {
                  updated_at INTEGER NOT NULL
              );
 
+             CREATE TABLE IF NOT EXISTS chapter_progress (
+                 manga_id TEXT NOT NULL,
+                 chapter_id TEXT NOT NULL,
+                 page_index INTEGER NOT NULL DEFAULT 0,
+                 scroll_offset_y REAL NOT NULL DEFAULT 0.0,
+                 chapter_number REAL,
+                 updated_at INTEGER NOT NULL,
+                 PRIMARY KEY (manga_id, chapter_id)
+             );
+
              CREATE TABLE IF NOT EXISTS cached_chapters (
                  manga_id TEXT NOT NULL,
                  chapter_id TEXT NOT NULL,
@@ -87,6 +97,12 @@ impl LibraryStore {
         };
 
         let _ = store.import_legacy_properties(root);
+        if let Some(home) = dirs::home_dir() {
+            let legacy_zeravrix = home.join(".zeravrix");
+            if legacy_zeravrix.is_dir() && legacy_zeravrix != root {
+                let _ = store.import_legacy_properties(&legacy_zeravrix);
+            }
+        }
         Ok(store)
     }
 
@@ -110,18 +126,29 @@ impl LibraryStore {
     }
 
     pub fn list_history(&self) -> Vec<Manga> {
+        self.list_history_with_timestamps()
+            .into_iter()
+            .map(|(m, _)| m)
+            .collect()
+    }
+
+    pub fn list_history_with_timestamps(&self) -> Vec<(Manga, i64)> {
         let conn = self.conn.lock();
         let mut stmt = match conn.prepare(
-            "SELECT id, title, cover_url, description, source_id, author, artist, genres_json, status, cached_chapter_count, url, is_manhwa
+            "SELECT id, title, cover_url, description, source_id, author, artist, genres_json, status, cached_chapter_count, url, is_manhwa, last_accessed
              FROM history_manga ORDER BY last_accessed DESC LIMIT 250",
         ) {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
 
-        stmt.query_map([], Self::row_to_manga)
-            .map(|rows| rows.filter_map(Result::ok).collect())
-            .unwrap_or_default()
+        stmt.query_map([], |row| {
+            let manga = Self::row_to_manga(row)?;
+            let ts: i64 = row.get(12)?;
+            Ok((manga, ts))
+        })
+        .map(|rows| rows.filter_map(Result::ok).collect())
+        .unwrap_or_default()
     }
 
     pub fn is_favorite(&self, manga_id: &str) -> bool {
@@ -179,6 +206,12 @@ impl LibraryStore {
         Ok(())
     }
 
+    pub fn remove_history(&self, manga_id: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM history_manga WHERE id = ?1", params![manga_id])?;
+        Ok(())
+    }
+
     pub fn toggle_favorite(&self, manga: &Manga) -> bool {
         if self.is_favorite(&manga.id) {
             let _ = self.remove_favorite(&manga.id);
@@ -199,6 +232,9 @@ impl LibraryStore {
              ON CONFLICT(id) DO UPDATE SET
                  title = excluded.title,
                  cover_url = COALESCE(excluded.cover_url, history_manga.cover_url),
+                 description = CASE WHEN excluded.description != '' THEN excluded.description ELSE history_manga.description END,
+                 author = COALESCE(excluded.author, history_manga.author),
+                 status = COALESCE(excluded.status, history_manga.status),
                  last_accessed = excluded.last_accessed",
             params![
                 manga.id,
@@ -243,6 +279,23 @@ impl LibraryStore {
                 progress.updated_at,
             ],
         );
+        let _ = conn.execute(
+            "INSERT INTO chapter_progress (manga_id, chapter_id, page_index, scroll_offset_y, chapter_number, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(manga_id, chapter_id) DO UPDATE SET
+                 page_index = excluded.page_index,
+                 scroll_offset_y = excluded.scroll_offset_y,
+                 chapter_number = excluded.chapter_number,
+                 updated_at = excluded.updated_at",
+            params![
+                progress.manga_id,
+                progress.chapter_id,
+                progress.page_index as i64,
+                progress.scroll_offset_y,
+                progress.chapter_number,
+                progress.updated_at,
+            ],
+        );
     }
 
     pub fn latest_progress(&self, manga_id: &str) -> Option<ReadingProgress> {
@@ -264,6 +317,48 @@ impl LibraryStore {
         )
         .optional()
         .unwrap_or(None)
+    }
+
+    pub fn chapter_progress(&self, manga_id: &str, chapter_id: &str) -> Option<ReadingProgress> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT manga_id, chapter_id, page_index, scroll_offset_y, chapter_number, updated_at
+             FROM chapter_progress WHERE manga_id = ?1 AND chapter_id = ?2",
+            params![manga_id, chapter_id],
+            |row| {
+                Ok(ReadingProgress {
+                    manga_id: row.get(0)?,
+                    chapter_id: row.get(1)?,
+                    page_index: row.get::<_, i64>(2)?.max(0) as usize,
+                    scroll_offset_y: row.get(3)?,
+                    chapter_number: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
+        )
+        .optional()
+        .unwrap_or(None)
+    }
+
+    pub fn read_chapter_ids(&self, manga_id: &str) -> HashSet<String> {
+        let conn = self.conn.lock();
+        let mut stmt = match conn.prepare("SELECT chapter_id FROM chapter_progress WHERE manga_id = ?1") {
+            Ok(s) => s,
+            Err(_) => return HashSet::new(),
+        };
+        stmt.query_map(params![manga_id], |row| row.get::<_, String>(0))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn latest_global_read(&self) -> Option<(Manga, ReadingProgress)> {
+        let history = self.list_history();
+        for m in history {
+            if let Some(p) = self.latest_progress(&m.id) {
+                return Some((m, p));
+            }
+        }
+        None
     }
 
     pub fn cache_chapters(&self, manga_id: &str, chapters: &[Chapter]) {
@@ -363,7 +458,36 @@ impl LibraryStore {
                 }
             }
         }
+
+        let prog_dir = dir.join("progress");
+        if prog_dir.is_dir() {
+            if let Ok(entries) = fs::read_dir(&prog_dir) {
+                for entry in entries.flatten() {
+                    if entry.path().extension().and_then(|e| e.to_str()) == Some("properties") {
+                        if let Some(prog) = Self::parse_legacy_progress_props(&entry.path()) {
+                            self.save_progress(&prog);
+                        }
+                    }
+                }
+            }
+        }
         imported
+    }
+
+    pub fn map_legacy_source_id(raw: &str) -> String {
+        match raw.trim() {
+            "5566779435889617217" | "builtin_5566779435889617217" | "5567916380686832973" => "MANGASWAT".to_string(),
+            "6072382903332029516" | "builtin_6072382903332029516" | "5718020030972536147" => "TEAMX".to_string(),
+            "5566779435889395019" | "builtin_5566779435889395019" | "5566779435889394507" => "MANGALEK".to_string(),
+            "5999441715024189778" | "builtin_5999441715024189778" | "5999441715024189773" => "MANGASPARK".to_string(),
+            "280755442241" | "builtin_280755442241" => "AZORA".to_string(),
+            "79479369100353" | "builtin_79479369100353" => "HIJALA".to_string(),
+            "293250961746" | "builtin_293250961746" => "DILAR".to_string(),
+            "82780424806979" | "builtin_82780424806979" => "KOMGA".to_string(),
+            "81663804732481" | "builtin_81663804732481" => "KAVITA".to_string(),
+            "6504664879555235651" | "builtin_6504664879555235651" => "LOCAL_FILES".to_string(),
+            other => other.to_string(),
+        }
     }
 
     fn parse_legacy_manga_props(path: &Path) -> Option<Manga> {
@@ -375,7 +499,7 @@ impl LibraryStore {
                 continue;
             }
             if let Some((k, v)) = trimmed.split_once('=') {
-                map.insert(k.trim().to_string(), v.trim().to_string());
+                map.insert(k.trim().to_string(), v.trim().replace("\\:", ":").replace("\\=", "="));
             }
         }
         let id = map.get("id")?.clone();
@@ -385,12 +509,13 @@ impl LibraryStore {
             .map(|g| g.split('|').filter(|s| !s.is_empty()).map(String::from).collect())
             .unwrap_or_default();
         let is_manhwa = Manga::detect_manhwa(&title, &id, &genres);
+        let raw_source = map.get("sourceId").map(String::as_str).unwrap_or("MANGADEX");
         Some(Manga {
             id: id.clone(),
             title,
             cover_url: map.get("coverUrl").cloned().filter(|s| !s.is_empty()),
             description: map.get("description").cloned().unwrap_or_default(),
-            source_id: map.get("sourceId").cloned().unwrap_or_else(|| "MANGADEX".to_string()),
+            source_id: Self::map_legacy_source_id(raw_source),
             author: map.get("author").cloned().filter(|s| !s.is_empty()),
             artist: map.get("artist").cloned().filter(|s| !s.is_empty()),
             genres,
@@ -398,6 +523,33 @@ impl LibraryStore {
             cached_chapter_count: map.get("cachedChapterCount").and_then(|c| c.parse().ok()),
             url: map.get("url").cloned().or(Some(id)),
             is_manhwa,
+        })
+    }
+
+    fn parse_legacy_progress_props(path: &Path) -> Option<ReadingProgress> {
+        let content = fs::read_to_string(path).ok()?;
+        let mut map = HashMap::new();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some((k, v)) = trimmed.split_once('=') {
+                map.insert(k.trim().to_string(), v.trim().replace("\\:", ":").replace("\\=", "="));
+            }
+        }
+        let manga_id = map.get("mangaId")?.clone();
+        let chapter_id = map.get("chapterId")?.clone();
+        let page_index = map.get("pageIndex").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+        let chapter_number = map.get("chapterNumber").and_then(|v| v.parse::<f32>().ok());
+        let updated_at = map.get("updatedAt").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+        Some(ReadingProgress {
+            manga_id,
+            chapter_id,
+            page_index,
+            scroll_offset_y: 0.0,
+            chapter_number,
+            updated_at,
         })
     }
 }

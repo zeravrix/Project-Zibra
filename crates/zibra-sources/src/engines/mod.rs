@@ -1,4 +1,6 @@
 pub mod azora;
+pub mod dilar;
+pub mod generic_html;
 pub mod hijala;
 pub mod local;
 pub mod madara;
@@ -7,3 +9,4 @@ pub mod mangaswat;
 pub mod mangathemesia;
 pub mod servers;
 pub mod teamx;
+pub mod zeist;

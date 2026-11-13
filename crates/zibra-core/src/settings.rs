@@ -18,6 +18,12 @@ pub enum AppLanguage {
 }
 
 impl AppLanguage {
+    pub const ALL: &'static [AppLanguage] = &[
+        AppLanguage::English,
+        AppLanguage::Arabic,
+        AppLanguage::French,
+    ];
+
     pub fn code(&self) -> &'static str {
         match self {
             AppLanguage::English => "en",
@@ -53,10 +59,19 @@ impl ReaderModePreference {
 
     pub fn label(&self) -> &'static str {
         match self {
-            ReaderModePreference::Vertical => "Webtoon (Vertical Strip)",
-            ReaderModePreference::Single => "Single Page",
+            ReaderModePreference::Vertical => "Webtoon (Continuous Vertical)",
+            ReaderModePreference::Single => "Single Page (Horizontal)",
             ReaderModePreference::Double => "Double Page Spread",
-            ReaderModePreference::Auto => "Auto (Detect Manhwa)",
+            ReaderModePreference::Auto => "Auto (Detect Manhwa / Manga)",
+        }
+    }
+
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            ReaderModePreference::Vertical => "Webtoon",
+            ReaderModePreference::Single => "Single",
+            ReaderModePreference::Double => "Double",
+            ReaderModePreference::Auto => "Auto",
         }
     }
 }
@@ -138,6 +153,24 @@ impl ColorTheme {
         }
     }
 
+    pub fn description(&self) -> &'static str {
+        match self {
+            ColorTheme::Totoro => "Kotatsu default slate indigo",
+            ColorTheme::Monet => "Adaptive material sky blue",
+            ColorTheme::Expressive => "Vibrant expressive anime lilac",
+            ColorTheme::Miku => "Cyber cyan & teal palette",
+            ColorTheme::Asuka => "Eva coral crimson palette",
+            ColorTheme::Mion => "Lush forest emerald sage",
+            ColorTheme::Rikka => "Deep pastel lavender purple",
+            ColorTheme::Sakura => "Soft cherry blossom rose",
+            ColorTheme::Mamimi => "Electric cobalt indigo",
+            ColorTheme::Kanade => "Monochrome platinum slate",
+            ColorTheme::Itsuka => "Warm sunset peach amber",
+            ColorTheme::AmoledVoid => "True pitch-black #000000 OLED",
+            ColorTheme::HighContrast => "Crisp ultra-contrast monochrome",
+        }
+    }
+
     pub fn primary_rgb(&self) -> (u8, u8, u8) {
         match self {
             ColorTheme::Totoro | ColorTheme::AmoledVoid => (0xA6, 0xC8, 0xFF),
@@ -152,6 +185,23 @@ impl ColorTheme {
             ColorTheme::Kanade => (0xE2, 0xE2, 0xE6),
             ColorTheme::Itsuka => (0xFF, 0xBA, 0x8F),
             ColorTheme::HighContrast => (0xFF, 0xFF, 0xFF),
+        }
+    }
+
+    pub fn secondary_rgb(&self) -> (u8, u8, u8) {
+        match self {
+            ColorTheme::Totoro | ColorTheme::AmoledVoid => (0xBC, 0xC7, 0xDC),
+            ColorTheme::Monet => (0xBD, 0xC7, 0xDC),
+            ColorTheme::Expressive => (0xD2, 0xC1, 0xDF),
+            ColorTheme::Miku => (0xA6, 0xCE, 0xCF),
+            ColorTheme::Asuka => (0xE7, 0xBD, 0xB6),
+            ColorTheme::Mion => (0xEE, 0xBF, 0x6D),
+            ColorTheme::Rikka => (0xCD, 0xC2, 0xDB),
+            ColorTheme::Sakura => (0xE3, 0xBD, 0xC6),
+            ColorTheme::Mamimi => (0xBF, 0xC6, 0xDC),
+            ColorTheme::Kanade => (0xDD, 0xDC, 0xDC),
+            ColorTheme::Itsuka => (0xF7, 0xB9, 0x93),
+            ColorTheme::HighContrast => (0xE0, 0xE0, 0xE0),
         }
     }
 
@@ -172,6 +222,75 @@ impl ColorTheme {
             ColorTheme::HighContrast => (0x05, 0x05, 0x05),
         }
     }
+
+    pub fn dark_surface_container_rgb(&self) -> (u8, u8, u8) {
+        match self {
+            ColorTheme::Totoro => (0x17, 0x1A, 0x21),
+            ColorTheme::Monet => (0x16, 0x1C, 0x24),
+            ColorTheme::Expressive => (0x1E, 0x17, 0x24),
+            ColorTheme::Miku => (0x14, 0x1C, 0x1D),
+            ColorTheme::Asuka => (0x22, 0x17, 0x15),
+            ColorTheme::Mion => (0x17, 0x20, 0x16),
+            ColorTheme::Rikka => (0x1C, 0x17, 0x24),
+            ColorTheme::Sakura => (0x22, 0x16, 0x1B),
+            ColorTheme::Mamimi => (0x16, 0x1B, 0x26),
+            ColorTheme::Kanade => (0x1B, 0x1B, 0x1E),
+            ColorTheme::Itsuka => (0x23, 0x1A, 0x12),
+            ColorTheme::AmoledVoid => (0x0D, 0x0D, 0x0D),
+            ColorTheme::HighContrast => (0x14, 0x14, 0x14),
+        }
+    }
+
+    pub fn light_primary_rgb(&self) -> (u8, u8, u8) {
+        match self {
+            ColorTheme::Totoro | ColorTheme::AmoledVoid => (0x3C, 0x60, 0x90),
+            ColorTheme::Monet => (0x4A, 0x60, 0x7A),
+            ColorTheme::Expressive => (0x70, 0x52, 0x8A),
+            ColorTheme::Miku => (0x00, 0x69, 0x6D),
+            ColorTheme::Asuka => (0x90, 0x4A, 0x40),
+            ColorTheme::Mion => (0x3B, 0x69, 0x3A),
+            ColorTheme::Rikka => (0x68, 0x54, 0x8D),
+            ColorTheme::Sakura => (0x8C, 0x4A, 0x60),
+            ColorTheme::Mamimi => (0x46, 0x5D, 0x91),
+            ColorTheme::Kanade => (0x35, 0x35, 0x43),
+            ColorTheme::Itsuka => (0x97, 0x48, 0x00),
+            ColorTheme::HighContrast => (0x00, 0x00, 0x00),
+        }
+    }
+
+    pub fn light_bg_rgb(&self) -> (u8, u8, u8) {
+        match self {
+            ColorTheme::Totoro | ColorTheme::AmoledVoid => (0xF9, 0xF9, 0xFF),
+            ColorTheme::Monet => (0xF8, 0xFA, 0xFF),
+            ColorTheme::Expressive => (0xFC, 0xF7, 0xFF),
+            ColorTheme::Miku => (0xF5, 0xFA, 0xFA),
+            ColorTheme::Asuka => (0xFF, 0xF8, 0xF6),
+            ColorTheme::Mion => (0xF7, 0xFB, 0xF1),
+            ColorTheme::Rikka => (0xFE, 0xF7, 0xFF),
+            ColorTheme::Sakura => (0xFF, 0xF8, 0xF8),
+            ColorTheme::Mamimi => (0xFA, 0xF8, 0xFF),
+            ColorTheme::Kanade => (0xFC, 0xF8, 0xF9),
+            ColorTheme::Itsuka => (0xFF, 0xF8, 0xF5),
+            ColorTheme::HighContrast => (0xFF, 0xFF, 0xFF),
+        }
+    }
+
+    pub fn light_surface_container_rgb(&self) -> (u8, u8, u8) {
+        match self {
+            ColorTheme::Totoro | ColorTheme::AmoledVoid => (0xED, 0xED, 0xF4),
+            ColorTheme::Monet => (0xEC, 0xEF, 0xF5),
+            ColorTheme::Expressive => (0xF1, 0xEB, 0xF5),
+            ColorTheme::Miku => (0xEA, 0xEF, 0xEE),
+            ColorTheme::Asuka => (0xFC, 0xEA, 0xE7),
+            ColorTheme::Mion => (0xEC, 0xEF, 0xE6),
+            ColorTheme::Rikka => (0xF2, 0xEC, 0xF4),
+            ColorTheme::Sakura => (0xFA, 0xEA, 0xED),
+            ColorTheme::Mamimi => (0xEE, 0xED, 0xF4),
+            ColorTheme::Kanade => (0xEB, 0xE7, 0xE8),
+            ColorTheme::Itsuka => (0xFD, 0xEA, 0xE1),
+            ColorTheme::HighContrast => (0xF0, 0xF0, 0xF0),
+        }
+    }
 }
 
 pub fn default_pinned_source_ids() -> HashSet<String> {
@@ -187,6 +306,7 @@ pub fn default_pinned_source_ids() -> HashSet<String> {
         "ASURASCANS",
         "FLAMESCANS",
         "TOONILY",
+        "WEBTOONS_EN",
     ]
     .into_iter()
     .map(String::from)
@@ -203,6 +323,10 @@ pub struct AppSettings {
     pub reading_direction: String,
     pub fit_to_width: bool,
     pub seam_trim_px: u32,
+    pub auto_crop_margins: bool,
+    pub preferred_source_language: String,
+    pub custom_icon_path: Option<String>,
+    pub infinite_chapter_scroll: bool,
     pub preload_pages_ahead: usize,
     pub preload_pages_behind: usize,
     pub ram_cache_budget_mb: usize,
@@ -236,9 +360,13 @@ impl Default for AppSettings {
             reading_direction: "LTR".to_string(),
             fit_to_width: true,
             seam_trim_px: 0,
+            auto_crop_margins: false,
+            preferred_source_language: "ALL".to_string(),
+            custom_icon_path: None,
+            infinite_chapter_scroll: true,
             preload_pages_ahead: 5,
             preload_pages_behind: 3,
-            ram_cache_budget_mb: 160,
+            ram_cache_budget_mb: 192,
             disk_cache_budget_mb: 1024,
             max_concurrent_downloads: 4,
             dns_over_https: true,

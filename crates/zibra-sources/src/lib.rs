@@ -1,3 +1,4 @@
+pub mod catalog_data;
 pub mod engines;
 pub mod extractor;
 pub mod registry;
@@ -21,6 +22,57 @@ pub trait Source: Send + Sync {
     fn base_url(&self) -> &str;
     fn priority_rank(&self) -> u32;
     fn tags(&self) -> &[SourceTag];
+
+    fn is_nsfw(&self) -> bool {
+        if self.tags().contains(&SourceTag::Nsfw) {
+            return true;
+        }
+        let combined = format!(
+            "{} {} {}",
+            self.id().to_lowercase(),
+            self.name().to_lowercase(),
+            self.base_url().to_lowercase()
+        );
+        const ADULT_KEYWORDS: &[&str] = &[
+            "18+",
+            "+18",
+            "nsfw",
+            "hentai",
+            "adult",
+            "erotica",
+            "smut",
+            "porn",
+            "xxx",
+            "milftoon",
+            "nhentai",
+            "hitomi",
+            "imhentai",
+            "e-hentai",
+            "exhentai",
+            "hentairead",
+            "hentai2read",
+            "hentaifox",
+            "multporn",
+            "8muses",
+            "luscious",
+            "pururin",
+            "tsumino",
+            "simply-hentai",
+            "asmhentai",
+            "wnacg",
+            "18comic",
+            "jmcomic",
+            "manhwa18",
+            "manga18",
+            "webtoon18",
+            "hentaidex",
+            "doujins",
+            "allporncomic",
+            "myreadingmanga",
+            "yaoimanga",
+        ];
+        ADULT_KEYWORDS.iter().any(|k| combined.contains(k))
+    }
 
     fn icon_url(&self) -> String {
         let host = url::Url::parse(self.base_url())

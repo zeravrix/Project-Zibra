@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=ZIBRA (ZERAVRIX Rust Edition)
+GenericName=Manga & Webtoon Reader
+Comment=100% Native Rust Desktop Manga & Webtoon Reader with 1,647+ Sources
+Exec=/usr/bin/zibra %U
+Icon=zibra
+Terminal=false
+Type=Application
+Categories=Graphics;Viewer;Literature;
+Keywords=manga;manhwa;webtoon;comic;reader;zeravrix;zibra;
+StartupWMClass=zibra

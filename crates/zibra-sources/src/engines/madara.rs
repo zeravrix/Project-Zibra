@@ -51,15 +51,19 @@ impl MadaraEngine {
     }
 
     fn parse_card(&self, card: ElementRef<'_>, page_url: &str) -> Option<Manga> {
-        let link_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comics/'], .post-title a, h3 a, h4 a, a").ok()?;
+        let link_sel = Selector::parse("a[href*='/manga/'], a[href*='/series/'], a[href*='/comics/'], a[href*='/webtoon/'], .post-title a, h3 a, h4 a, a").ok()?;
         let anchor = card.select(&link_sel).next()?;
         let href = anchor.value().attr("href")?;
         let url = resolve_url(page_url, href)?;
-        if url == self.base_url || url.ends_with("/manga/") || url.ends_with("/series/") {
+        if url == self.base_url
+            || url.ends_with("/manga/")
+            || url.ends_with("/series/")
+            || url.ends_with("/comics/")
+        {
             return None;
         }
 
-        let title_sel = Selector::parse(".post-title, .entry-title, .data h3, h3, h4").ok()?;
+        let title_sel = Selector::parse(".post-title, .entry-title, .data h3, .tt, h3, h4").ok()?;
         let title = card
             .select(&title_sel)
             .next()
@@ -83,20 +87,42 @@ impl MadaraEngine {
 
     async fn fetch_archive(&self, page: u32, order: &str, query: Option<&str>) -> anyhow::Result<MangaPageResult> {
         let p = page.max(1);
-        let url = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
-            format!("{}/page/{}/?s={}&post_type=wp-manga", self.base_url, p, urlencoding::encode(q.trim()))
+        let candidates = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
+            let enc = urlencoding::encode(q.trim());
+            vec![
+                format!("{}/page/{}/?s={}&post_type=wp-manga", self.base_url, p, enc),
+                format!("{}/?s={}&post_type=wp-manga&paged={}", self.base_url, enc, p),
+                format!("{}/?s={}&page={}", self.base_url, enc, p),
+            ]
         } else {
-            format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order)
+            vec![
+                format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order),
+                format!("{}/page/{}/?s=&post_type=wp-manga&m_orderby={}", self.base_url, p, order),
+                if p <= 1 {
+                    format!("{}/manga/?m_orderby={}", self.base_url, order)
+                } else {
+                    format!("{}/page/{}/", self.base_url, p)
+                },
+            ]
         };
 
-        let html = match self.fetch_html(&url).await {
-            Ok(h) => h,
-            Err(_) if query.is_none() => {
-                let fallback = format!("{}/page/{}/?s=&post_type=wp-manga&m_orderby={}", self.base_url, p, order);
-                self.fetch_html(&fallback).await?
+        let mut html = String::new();
+        let mut active_url = self.base_url.clone();
+        let mut last_err = None;
+        for u in candidates {
+            match self.fetch_html(&u).await {
+                Ok(h) if h.len() > 200 => {
+                    html = h;
+                    active_url = u;
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => last_err = Some(e),
             }
-            Err(e) => return Err(e),
-        };
+        }
+        if html.is_empty() {
+            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{} returned empty page", self.name)));
+        }
 
         let doc = Html::parse_document(&html);
         let card_sel = Selector::parse("div.page-item-detail, .row.c-tabs-item__content, .manga__item, .manga-item, .item-summary, .bsx, .listupd .bs, .box").unwrap();
@@ -104,14 +130,14 @@ impl MadaraEngine {
         let mut seen = HashSet::new();
 
         for card in doc.select(&card_sel) {
-            if let Some(m) = self.parse_card(card, &url) {
+            if let Some(m) = self.parse_card(card, &active_url) {
                 if seen.insert(m.id.clone()) {
                     items.push(m);
                 }
             }
         }
 
-        let has_next = items.len() >= 12;
+        let has_next = items.len() >= 10;
         Ok(MangaPageResult {
             items,
             has_next_page: has_next,
@@ -120,7 +146,7 @@ impl MadaraEngine {
 
     fn parse_chapters_from_html(&self, html: &str, manga_id: &str) -> Vec<Chapter> {
         let doc = Html::parse_document(html);
-        let ch_sel = Selector::parse("li.wp-manga-chapter a, .chapter-item a, .listing-chapters_wrap a, #chapter-list a[href]").unwrap();
+        let ch_sel = Selector::parse("li.wp-manga-chapter a, .chapter-item a, .listing-chapters_wrap a, #chapter-list a[href], .version-chap li a").unwrap();
         let mut list = Vec::new();
         let mut seen = HashSet::new();
 
@@ -128,7 +154,7 @@ impl MadaraEngine {
             if let Some(href) = link.value().attr("href") {
                 if let Some(full_url) = resolve_url(manga_id, href) {
                     let clean_url = full_url.split("?style=paged").next().unwrap_or(&full_url).to_string();
-                    if clean_url == manga_id.trim_end_matches('/') || !seen.insert(clean_url.clone()) {
+                    if clean_url.trim_end_matches('/') == manga_id.trim_end_matches('/') || !seen.insert(clean_url.clone()) {
                         continue;
                     }
                     let title = link.text().collect::<String>().trim().to_string();
@@ -211,6 +237,7 @@ impl Source for MadaraEngine {
         let html = self.fetch_html(&manga.id).await?;
         let mut chapters = self.parse_chapters_from_html(&html, &manga.id);
 
+        // Fallback 1: Modern Madara POST <manga_url>/ajax/chapters/
         if chapters.is_empty() {
             let ajax_url = format!("{}/ajax/chapters/", manga.id.trim_end_matches('/'));
             if let Ok(resp) = self
@@ -227,13 +254,51 @@ impl Source for MadaraEngine {
             }
         }
 
+        // Fallback 2: Classic Madara POST /wp-admin/admin-ajax.php (action=manga_get_chapters&manga=<data-id>)
+        if chapters.is_empty() {
+            let holder_id = {
+                let doc = Html::parse_document(&html);
+                let holder_sel = Selector::parse("div[id^='manga-chapters-holder']").unwrap();
+                doc.select(&holder_sel)
+                    .next()
+                    .and_then(|el| el.value().attr("data-id"))
+                    .map(String::from)
+            };
+            if let Some(data_id) = holder_id {
+                let admin_ajax = format!("{}/wp-admin/admin-ajax.php", self.base_url);
+                let body = format!("action=manga_get_chapters&manga={}", urlencoding::encode(&data_id));
+                if let Ok(resp) = self
+                    .client
+                    .post(&admin_ajax)
+                    .header("Referer", &manga.id)
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                    .body(body)
+                    .send()
+                    .await
+                {
+                    if let Ok(xhr_html) = resp.text().await {
+                        chapters = self.parse_chapters_from_html(&xhr_html, &manga.id);
+                    }
+                }
+            }
+        }
+
         Ok(chapters)
     }
 
     async fn pages(&self, chapter: &Chapter) -> anyhow::Result<Vec<MangaPage>> {
-        let html = self.fetch_html(&chapter.id).await?;
+        let list_url = if chapter.id.contains("?style=") {
+            chapter.id.clone()
+        } else {
+            format!("{}?style=list", chapter.id.trim_end_matches('/'))
+        };
+        let html = match self.fetch_html(&list_url).await {
+            Ok(h) => h,
+            Err(_) => self.fetch_html(&chapter.id).await?,
+        };
         let mut headers = HashMap::new();
-        headers.insert("Referer".to_string(), chapter.id.clone());
+        headers.insert("Referer".to_string(), format!("{}/", self.base_url));
         Ok(extract_chapter_pages(
             &html,
             &chapter.id,

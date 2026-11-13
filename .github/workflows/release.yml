@@ -1,0 +1,63 @@
+name: Build & Release ZIBRA (Windows & Linux)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release --workspace
+      - name: Package Linux archive
+        run: |
+          mkdir -p dist/zibra-linux-x86_64
+          cp target/release/zibra dist/zibra-linux-x86_64/
+          cp -r assets dist/zibra-linux-x86_64/
+          cp distribution/linux/zibra.desktop dist/zibra-linux-x86_64/
+          cp LICENSE README.md dist/zibra-linux-x86_64/
+          tar -czvf ZIBRA-Linux-x86_64.tar.gz -C dist zibra-linux-x86_64
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZIBRA-Linux-x86_64
+          path: ZIBRA-Linux-x86_64.tar.gz
+
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release --workspace
+      - name: Package Windows Portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/ZIBRA-Windows-x64
+          Copy-Item target/release/zibra.exe dist/ZIBRA-Windows-x64/
+          Copy-Item -Recurse assets dist/ZIBRA-Windows-x64/
+          Copy-Item LICENSE, README.md dist/ZIBRA-Windows-x64/
+          Compress-Archive -Path dist/ZIBRA-Windows-x64/* -DestinationPath ZIBRA-Windows-x64-Portable.zip
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZIBRA-Windows-x64-Portable
+          path: ZIBRA-Windows-x64-Portable.zip

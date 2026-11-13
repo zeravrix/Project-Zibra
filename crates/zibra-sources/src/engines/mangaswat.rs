@@ -7,7 +7,7 @@ use zibra_core::{Chapter, Manga, MangaPage, SourceTag};
 pub struct MangaSwatSource {
     client: reqwest::Client,
     base_url: String,
-    api_url: String,
+    api_urls: Vec<String>,
 }
 
 impl MangaSwatSource {
@@ -15,20 +15,58 @@ impl MangaSwatSource {
         let base = "https://meshmanga.com".to_string();
         Self {
             client,
-            api_url: format!("{}/v2/api/v2", base),
+            api_urls: vec![
+                "https://meshmanga.com/v2/api/v2".to_string(),
+                "https://appswat.com/v2/api/v2".to_string(),
+            ],
             base_url: base,
         }
     }
 
-    async fn api_get(&self, url: &str) -> anyhow::Result<Value> {
-        Ok(self
-            .client
-            .get(url)
-            .header("Accept", "application/json")
-            .send()
-            .await?
-            .json::<Value>()
-            .await?)
+    async fn api_get(&self, path_or_url: &str) -> anyhow::Result<Value> {
+        if path_or_url.starts_with("http://") || path_or_url.starts_with("https://") {
+            let resp = self
+                .client
+                .get(path_or_url)
+                .header("Accept", "application/json")
+                .header("Referer", format!("{}/", self.base_url))
+                .send()
+                .await?;
+            if resp.status().is_success() {
+                if let Ok(v) = resp.json::<Value>().await {
+                    return Ok(v);
+                }
+            }
+        }
+
+        let rel = if let Some(idx) = path_or_url.find("/v2/api/v2/") {
+            &path_or_url[idx + "/v2/api/v2".len()..]
+        } else {
+            path_or_url
+        };
+
+        let mut last_err = anyhow::anyhow!("MangaSwat API unreachable");
+        for api_base in &self.api_urls {
+            let target = format!("{}/{}", api_base.trim_end_matches('/'), rel.trim_start_matches('/'));
+            match self
+                .client
+                .get(&target)
+                .header("Accept", "application/json")
+                .header("Referer", format!("{}/", self.base_url))
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
+                    Ok(v) => return Ok(v),
+                    Err(e) => last_err = e.into(),
+                },
+                Ok(resp) => {
+                    last_err = anyhow::anyhow!("HTTP {} from {}", resp.status(), target);
+                }
+                Err(e) => last_err = e.into(),
+            }
+        }
+        Err(last_err)
     }
 
     fn parse_manga(&self, raw: &Value) -> Option<Manga> {
@@ -53,7 +91,7 @@ impl MangaSwatSource {
             })
             .map(String::from);
 
-        let full_id = format!("{}/series/{}/", self.api_url, id);
+        let full_id = format!("{}/series/{}/", self.api_urls[0], id);
         let mut m = Manga::new(full_id, title, "MANGASWAT");
         m.cover_url = cover;
         m.is_manhwa = true;
@@ -65,7 +103,7 @@ impl MangaSwatSource {
 #[async_trait]
 impl Source for MangaSwatSource {
     fn id(&self) -> &str { "MANGASWAT" }
-    fn name(&self) -> &str { "MangaSwat" }
+    fn name(&self) -> &str { "MangaSwat (MeshManga)" }
     fn language(&self) -> &str { "ar" }
     fn base_url(&self) -> &str { &self.base_url }
     fn priority_rank(&self) -> u32 { 2 }
@@ -83,7 +121,7 @@ impl Source for MangaSwatSource {
 
     async fn popular(&self, page: u32) -> anyhow::Result<MangaPageResult> {
         let root = self
-            .api_get(&format!("{}/series/?order_by=-followers_count&page={}", self.api_url, page.max(1)))
+            .api_get(&format!("/series/?order_by=-followers_count&page={}", page.max(1)))
             .await?;
         let items: Vec<Manga> = root
             .get("results")
@@ -98,7 +136,7 @@ impl Source for MangaSwatSource {
 
     async fn latest(&self, page: u32) -> anyhow::Result<MangaPageResult> {
         let root = self
-            .api_get(&format!("{}/series/releases/?page={}", self.api_url, page.max(1)))
+            .api_get(&format!("/series/releases/?page={}", page.max(1)))
             .await?;
         let items: Vec<Manga> = root
             .get("results")
@@ -114,8 +152,7 @@ impl Source for MangaSwatSource {
     async fn search(&self, page: u32, query: &str) -> anyhow::Result<MangaPageResult> {
         let root = self
             .api_get(&format!(
-                "{}/series/?search={}&page={}",
-                self.api_url,
+                "/series/?search={}&page={}",
                 urlencoding::encode(query.trim()),
                 page.max(1)
             ))
@@ -140,6 +177,16 @@ impl Source for MangaSwatSource {
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string();
+        if let Some(genres_arr) = root.get("genres").and_then(|v| v.as_array()) {
+            let g: Vec<String> = genres_arr
+                .iter()
+                .filter_map(|item| item.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect();
+            if !g.is_empty() {
+                updated.genres = g;
+                updated.enrich_manhwa_tags();
+            }
+        }
         Ok(updated)
     }
 
@@ -151,7 +198,7 @@ impl Source for MangaSwatSource {
             .next()
             .unwrap_or(&manga.id);
         let root = self
-            .api_get(&format!("{}/chapters/?serie={}&order_by=-order&page_size=200", self.api_url, series_id))
+            .api_get(&format!("/chapters/?serie={}&order_by=-order&page_size=200", series_id))
             .await?;
 
         let mut list = Vec::new();
@@ -164,7 +211,7 @@ impl Source for MangaSwatSource {
                     .and_then(|v| v.as_str())
                     .unwrap_or("Chapter")
                     .to_string();
-                let full_url = format!("{}/chapters/{}/", self.api_url, ch_id);
+                let full_url = format!("{}/chapters/{}/", self.api_urls[0], ch_id);
                 let num = parse_chapter_number(&title);
                 list.push(Chapter::new(full_url, manga.id.clone(), title, num, "MANGASWAT"));
             }
@@ -178,7 +225,7 @@ impl Source for MangaSwatSource {
         if let Some(arr) = root.get("images").or_else(|| root.get("pages")).and_then(|v| v.as_array()) {
             for (idx, item) in arr.iter().enumerate() {
                 if let Some(url) = item.get("image").or_else(|| item.get("url")).and_then(|v| v.as_str()) {
-                    pages.push(MangaPage::new(idx, url, Some(chapter.id.clone())));
+                    pages.push(MangaPage::new(idx, url.trim(), Some(format!("{}/", self.base_url))));
                 }
             }
         }

@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct SpringDamper {
     pub value: f32,
@@ -7,6 +8,7 @@ pub struct SpringDamper {
     pub damping: f32,
 }
 
+#[allow(dead_code)]
 impl SpringDamper {
     pub fn new(initial: f32) -> Self {
         Self {
