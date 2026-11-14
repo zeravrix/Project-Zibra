@@ -53,5 +53,11 @@ async fn test_jvm_host_kotatsu_sources_binding() {
     let popular = swat.popular(1).await.expect("Kotatsu MangaSwat popular fetch must succeed");
     assert!(!popular.items.is_empty(), "MangaSwat must return titles through Kotatsu JVM host bridge");
     println!("Kotatsu MangaSwat returned {} titles! Sample: {}", popular.items.len(), popular.items[0].title);
+
+    // Verify lookup by uppercase name and that Kotatsu source overrides scraper with priority rank
+    let swat_by_name = registry.get("MANGASWAT").expect("MangaSwat by name must exist in registry");
+    assert_eq!(swat_by_name.language(), "ar");
+    assert!(swat_by_name.base_url().starts_with("https://"));
+    assert_eq!(swat_by_name.priority_rank(), 2);
 }
 

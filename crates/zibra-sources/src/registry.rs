@@ -166,18 +166,13 @@ impl LiveSourceRegistry {
                     Ok(Some(client)) => {
                         *jvm_lock.write() = Some(client.clone());
                         if let Ok(list) = client.list_sources().await {
-                            println!("[JVM-HOST] Bound {} Kotatsu parser sources into ZIBRA LiveSourceRegistry!", list.len());
-                            let mut s_w = sources_lock.write();
-                            let mut m_w = map_lock.write();
-                            for info in list {
-                                let jvm_source = Arc::new(JvmHostSource::new(client.clone(), &info));
-                                m_w.insert(jvm_source.id().to_string(), jvm_source.clone());
-                                m_w.insert(jvm_source.id().to_uppercase(), jvm_source.clone());
-                                m_w.insert(info.id.to_string(), jvm_source.clone());
-                                let name_key = info.name.to_uppercase().replace(' ', "");
-                                m_w.entry(name_key).or_insert_with(|| jvm_source.clone());
-                                s_w.push(jvm_source);
-                            }
+                            let bound = Self::register_jvm_sources_into_registry(
+                                &sources_lock,
+                                &map_lock,
+                                client,
+                                list,
+                            );
+                            println!("[JVM-HOST] Bound and upgraded {} Kotatsu parser sources into ZIBRA registry!", bound);
                         }
                     }
                     Ok(None) => {}
@@ -193,21 +188,74 @@ impl LiveSourceRegistry {
         };
         *self.jvm_client.write() = Some(client.clone());
         let list = client.list_sources().await?;
+        let count = Self::register_jvm_sources_into_registry(
+            &self.sources,
+            &self.source_map,
+            client,
+            list,
+        );
+        Ok(count)
+    }
+
+    fn register_jvm_sources_into_registry(
+        sources_lock: &Arc<RwLock<Vec<Arc<dyn Source>>>>,
+        map_lock: &Arc<RwLock<HashMap<String, Arc<dyn Source>>>>,
+        client: Arc<JvmHostClient>,
+        list: Vec<crate::jvm_host::HostSourceInfo>,
+    ) -> usize {
         let count = list.len();
-        {
-            let mut s_w = self.sources.write();
-            let mut m_w = self.source_map.write();
-            for info in list {
-                let jvm_source = Arc::new(JvmHostSource::new(client.clone(), &info));
-                m_w.insert(jvm_source.id().to_string(), jvm_source.clone());
-                m_w.insert(jvm_source.id().to_uppercase(), jvm_source.clone());
-                m_w.insert(info.id.to_string(), jvm_source.clone());
-                let name_key = info.name.to_uppercase().replace(' ', "");
-                m_w.entry(name_key).or_insert_with(|| jvm_source.clone());
-                s_w.push(jvm_source);
+        let mut s_w = sources_lock.write();
+        let mut m_w = map_lock.write();
+
+        for info in list {
+            let raw_id_str = info.id.to_string();
+            let mapped = LibraryStore::map_legacy_source_id(&raw_id_str);
+            let name_key = info.name.to_uppercase().replace([' ', '.', '-', '_'], "");
+            let name_upper = info.name.to_uppercase();
+
+            let existing_rank = s_w
+                .iter()
+                .find(|s| {
+                    s.id().eq_ignore_ascii_case(&raw_id_str)
+                        || (!mapped.is_empty() && s.id().eq_ignore_ascii_case(&mapped))
+                        || s.name().to_uppercase().replace([' ', '.', '-', '_'], "") == name_key
+                        || s.name().eq_ignore_ascii_case(&info.name)
+                })
+                .map(|s| s.priority_rank())
+                .unwrap_or(15);
+
+            let jvm_source = Arc::new(JvmHostSource::with_rank(client.clone(), &info, existing_rank));
+            let norm_id = jvm_source.id().to_string();
+            let norm_id_upper = norm_id.to_uppercase();
+
+            // Register all aliases into source_map so lookups route directly to the Kotatsu source
+            m_w.insert(norm_id, jvm_source.clone());
+            m_w.insert(norm_id_upper, jvm_source.clone());
+            m_w.insert(raw_id_str.clone(), jvm_source.clone());
+            m_w.insert(format!("builtin_{}", raw_id_str), jvm_source.clone());
+            m_w.insert(name_key.clone(), jvm_source.clone());
+            m_w.insert(name_upper, jvm_source.clone());
+            m_w.insert(info.name.clone(), jvm_source.clone());
+
+            if !mapped.is_empty() && mapped != raw_id_str {
+                m_w.insert(mapped.clone(), jvm_source.clone());
+                m_w.insert(mapped.to_uppercase(), jvm_source.clone());
+            }
+
+            // Upgrade or add into catalog list
+            if let Some(pos) = s_w.iter().position(|s| {
+                s.id().eq_ignore_ascii_case(jvm_source.id())
+                    || s.name().eq_ignore_ascii_case(jvm_source.name())
+                    || s.id().eq_ignore_ascii_case(&raw_id_str)
+                    || (!mapped.is_empty() && s.id().eq_ignore_ascii_case(&mapped))
+                    || s.name().to_uppercase().replace([' ', '.', '-', '_'], "") == name_key
+            }) {
+                s_w[pos] = jvm_source.clone();
+            } else {
+                s_w.push(jvm_source.clone());
             }
         }
-        Ok(count)
+        count
     }
 
     fn load_user_repository_sources(sources: &mut Vec<Arc<dyn Source>>, client: &reqwest::Client) {

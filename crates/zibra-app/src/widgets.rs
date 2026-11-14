@@ -33,6 +33,36 @@ pub enum NativeIcon {
     ZoomIn,
     ZoomOut,
     Refresh,
+    Book,
+    Play,
+    Previous,
+    Next,
+    Check,
+    Pin,
+    Filter,
+}
+
+pub fn map_str_to_native_icon(s: &str) -> Option<NativeIcon> {
+    match s.trim() {
+        "🧭" | "explore" => Some(NativeIcon::Explore),
+        "⬅" | "←" | "back" => Some(NativeIcon::Back),
+        "🔄" | "refresh" | "retry" => Some(NativeIcon::Refresh),
+        "▶" | "play" | "read" => Some(NativeIcon::Play),
+        "⏮" | "first" => Some(NativeIcon::Previous),
+        "⏭" | "latest" => Some(NativeIcon::Next),
+        "✕" | "x" | "close" | "clear" => Some(NativeIcon::Close),
+        "📌" | "pin" => Some(NativeIcon::Pin),
+        "⬇" | "download" => Some(NativeIcon::Downloads),
+        "⚙" | "settings" => Some(NativeIcon::Settings),
+        "❤️" | "♡" | "favorite" | "fav" => Some(NativeIcon::Favorites),
+        "📖" | "book" => Some(NativeIcon::Book),
+        "✓" | "check" => Some(NativeIcon::Check),
+        "🔍" | "search" => Some(NativeIcon::Search),
+        "🌙" | "amoled" => Some(NativeIcon::Amoled),
+        "🔥" | "popular" => Some(NativeIcon::Explore),
+        "🆕" => Some(NativeIcon::Refresh),
+        _ => None,
+    }
 }
 
 pub fn paint_native_icon(
@@ -54,7 +84,7 @@ pub fn paint_native_icon(
             painter.line_segment([center, center + Vec2::new(0.0, -r * 0.55)], stroke);
         }
         NativeIcon::Favorites => {
-            let n_points = 32;
+            let n_points = 24;
             let mut points = Vec::with_capacity(n_points + 1);
             let scale = r / 16.5;
             for i in 0..=n_points {
@@ -64,7 +94,7 @@ pub fn paint_native_icon(
                 let y = -(13.0 * t.cos() - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos());
                 points.push(center + Vec2::new(x * scale, (y + 1.8) * scale));
             }
-            painter.add(egui::epaint::PathShape::line(points, stroke));
+            painter.add(egui::epaint::PathShape::closed_line(points, stroke));
         }
         NativeIcon::Explore => {
             painter.circle_stroke(center, r * 0.90, stroke);
@@ -154,31 +184,35 @@ pub fn paint_native_icon(
             painter.line_segment([center + Vec2::new(d, d), center + Vec2::new(d, d - arm)], stroke);
         }
         NativeIcon::Amoled => {
-            let n = 16;
-            let mut moon = Vec::with_capacity(n * 2 + 1);
-            let r_outer = r * 0.85;
-            for i in 0..=n {
-                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * std::f32::consts::PI;
-                moon.push(center + Vec2::new(r_outer * a.cos(), r_outer * a.sin()));
-            }
-            let inner_c = center + Vec2::new(r * 0.32, 0.0);
+            let n = 24;
+            let r_outer = r * 0.88;
             let r_inner = r * 0.72;
-            for i in (0..=n).rev() {
-                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * std::f32::consts::PI;
-                moon.push(inner_c + Vec2::new(r_inner * a.cos(), r_inner * a.sin()));
+            let inner_c = center + Vec2::new(r * 0.32, 0.0);
+            let mut mesh = egui::Mesh::default();
+            for i in 0..n {
+                let a1 = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * std::f32::consts::PI;
+                let a2 = -std::f32::consts::FRAC_PI_2 + ((i + 1) as f32 / n as f32) * std::f32::consts::PI;
+                let p_out1 = center + Vec2::new(r_outer * a1.cos(), r_outer * a1.sin());
+                let p_out2 = center + Vec2::new(r_outer * a2.cos(), r_outer * a2.sin());
+                let p_in1 = inner_c + Vec2::new(r_inner * a1.cos(), r_inner * a1.sin());
+                let p_in2 = inner_c + Vec2::new(r_inner * a2.cos(), r_inner * a2.sin());
+                let base = mesh.vertices.len() as u32;
+                mesh.vertices.push(egui::epaint::Vertex { pos: p_out1, uv: Pos2::ZERO, color });
+                mesh.vertices.push(egui::epaint::Vertex { pos: p_out2, uv: Pos2::ZERO, color });
+                mesh.vertices.push(egui::epaint::Vertex { pos: p_in2, uv: Pos2::ZERO, color });
+                mesh.vertices.push(egui::epaint::Vertex { pos: p_in1, uv: Pos2::ZERO, color });
+                mesh.add_triangle(base, base + 1, base + 2);
+                mesh.add_triangle(base, base + 2, base + 3);
             }
-            painter.add(egui::epaint::PathShape::convex_polygon(
-                moon,
-                color,
-                Stroke::NONE,
-            ));
+            painter.add(mesh);
         }
         NativeIcon::Back => {
-            let arm_x = r * 0.32;
-            let arm_y = r * 0.58;
+            let arm_x = r * 0.40;
+            let arm_y = r * 0.48;
             let tip = center + Vec2::new(-arm_x, 0.0);
-            painter.line_segment([center + Vec2::new(arm_x, -arm_y), tip], stroke);
-            painter.line_segment([tip, center + Vec2::new(arm_x, arm_y)], stroke);
+            painter.line_segment([center + Vec2::new(arm_x, 0.0), tip], stroke);
+            painter.line_segment([center + Vec2::new(0.0, -arm_y), tip], stroke);
+            painter.line_segment([tip, center + Vec2::new(0.0, arm_y)], stroke);
         }
         NativeIcon::Close => {
             let d = r * 0.55;
@@ -218,16 +252,77 @@ pub fn paint_native_icon(
             let arc_r = r * 0.68;
             let n_pts = 16;
             let mut arc = Vec::with_capacity(n_pts + 1);
-            let start_angle = -std::f32::consts::FRAC_PI_2;
-            let end_angle = std::f32::consts::PI;
+            let start_angle = -std::f32::consts::FRAC_PI_2 * 0.8;
+            let end_angle = std::f32::consts::PI * 1.15;
             for i in 0..=n_pts {
                 let a = start_angle + (i as f32 / n_pts as f32) * (end_angle - start_angle);
                 arc.push(center + Vec2::new(arc_r * a.cos(), arc_r * a.sin()));
             }
             painter.add(egui::epaint::PathShape::line(arc, stroke));
-            let tip = center + Vec2::new(0.0, -arc_r);
-            painter.line_segment([tip + Vec2::new(-r * 0.25, -r * 0.25), tip], stroke);
-            painter.line_segment([tip + Vec2::new(-r * 0.25, r * 0.25), tip], stroke);
+            let tip = center + Vec2::new(arc_r * start_angle.cos(), arc_r * start_angle.sin());
+            painter.line_segment([tip + Vec2::new(-r * 0.32, -r * 0.05), tip], stroke);
+            painter.line_segment([tip + Vec2::new(-r * 0.05, r * 0.32), tip], stroke);
+        }
+        NativeIcon::Book => {
+            let w = r * 0.85;
+            let h = r * 0.65;
+            let spine_top = center + Vec2::new(0.0, -h * 0.60);
+            let spine_bot = center + Vec2::new(0.0, h * 0.70);
+            painter.line_segment([spine_top, spine_bot], stroke);
+            let p_lt = center + Vec2::new(-w, -h * 0.40);
+            let p_lb = center + Vec2::new(-w, h * 0.90);
+            painter.line_segment([p_lt, p_lb], stroke);
+            painter.line_segment([spine_top, p_lt], stroke);
+            painter.line_segment([spine_bot, p_lb], stroke);
+            let p_rt = center + Vec2::new(w, -h * 0.40);
+            let p_rb = center + Vec2::new(w, h * 0.90);
+            painter.line_segment([p_rt, p_rb], stroke);
+            painter.line_segment([spine_top, p_rt], stroke);
+            painter.line_segment([spine_bot, p_rb], stroke);
+        }
+        NativeIcon::Play => {
+            let p1 = center + Vec2::new(-r * 0.40, -r * 0.55);
+            let p2 = center + Vec2::new(r * 0.60, 0.0);
+            let p3 = center + Vec2::new(-r * 0.40, r * 0.55);
+            painter.add(egui::epaint::PathShape::convex_polygon(vec![p1, p2, p3], color, Stroke::NONE));
+        }
+        NativeIcon::Previous => {
+            let bar_x = center.x - r * 0.50;
+            painter.line_segment([Pos2::new(bar_x, center.y - r * 0.50), Pos2::new(bar_x, center.y + r * 0.50)], stroke);
+            let tip = center + Vec2::new(-r * 0.40, 0.0);
+            painter.line_segment([center + Vec2::new(r * 0.45, -r * 0.50), tip], stroke);
+            painter.line_segment([tip, center + Vec2::new(r * 0.45, r * 0.50)], stroke);
+        }
+        NativeIcon::Next => {
+            let bar_x = center.x + r * 0.50;
+            painter.line_segment([Pos2::new(bar_x, center.y - r * 0.50), Pos2::new(bar_x, center.y + r * 0.50)], stroke);
+            let tip = center + Vec2::new(r * 0.40, 0.0);
+            painter.line_segment([center + Vec2::new(-r * 0.45, -r * 0.50), tip], stroke);
+            painter.line_segment([tip, center + Vec2::new(-r * 0.45, r * 0.50)], stroke);
+        }
+        NativeIcon::Check => {
+            let p1 = center + Vec2::new(-r * 0.55, 0.0);
+            let p2 = center + Vec2::new(-r * 0.15, r * 0.45);
+            let p3 = center + Vec2::new(r * 0.60, -r * 0.45);
+            painter.line_segment([p1, p2], stroke);
+            painter.line_segment([p2, p3], stroke);
+        }
+        NativeIcon::Pin => {
+            let head = center + Vec2::new(r * 0.45, -r * 0.45);
+            let body = center + Vec2::new(-r * 0.10, r * 0.10);
+            let needle = center + Vec2::new(-r * 0.60, r * 0.60);
+            painter.line_segment([head, body], Stroke::new(stroke_w * 1.6, color));
+            painter.line_segment([body, needle], stroke);
+            painter.circle_filled(head, stroke_w * 1.3, color);
+        }
+        NativeIcon::Filter => {
+            let p1 = center + Vec2::new(-r * 0.65, -r * 0.50);
+            let p2 = center + Vec2::new(r * 0.65, -r * 0.50);
+            let p3 = center + Vec2::new(r * 0.18, 0.0);
+            let p4 = center + Vec2::new(r * 0.18, r * 0.50);
+            let p5 = center + Vec2::new(-r * 0.18, r * 0.35);
+            let p6 = center + Vec2::new(-r * 0.18, 0.0);
+            painter.add(egui::epaint::PathShape::closed_line(vec![p1, p2, p3, p4, p5, p6], stroke));
         }
     }
 }
@@ -343,7 +438,7 @@ pub fn z_search_bar(
     submitted
 }
 
-/// Animated Cyber-Glass Filter Chip matching ZERAVRIX ZChip
+/// Animated Cyber-Glass Filter Chip matching ZERAVRIX ZChip with native vector icon support
 pub fn z_chip(
     ui: &mut egui::Ui,
     tokens: &GlassTokens,
@@ -351,38 +446,77 @@ pub fn z_chip(
     icon: Option<&str>,
     selected: bool,
 ) -> bool {
-    let text = match icon {
-        Some(ic) => format!("{}  {}", ic, label),
+    let native_icon = icon.and_then(map_str_to_native_icon);
+    let fallback_icon = if native_icon.is_none() { icon } else { None };
+
+    let text = match fallback_icon {
+        Some(ic) => format!("{} {}", ic, label),
         None => label.to_string(),
     };
-    let fg = if selected {
-        tokens.primary
-    } else {
-        tokens.text_muted
-    };
+
+    let font_id = FontId::proportional(12.5);
+    let galley = ui.painter().layout_no_wrap(text.clone(), font_id, Color32::WHITE);
+    let text_w = galley.size().x;
+    let icon_w = if native_icon.is_some() { 16.0 + 6.0 } else { 0.0 };
+    let chip_w = (text_w + icon_w + 22.0).max(44.0);
+    let chip_h = 30.0;
+
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(chip_w, chip_h), Sense::click());
+    let hovered = resp.hovered();
+    let hover_t = ui.ctx().animate_bool_responsive(resp.id, hovered || selected);
+
     let bg = if selected {
         tokens.primary_container
     } else {
-        tokens.surface_card
+        Color32::from_rgba_unmultiplied(
+            tokens.surface_card.r(),
+            tokens.surface_card.g(),
+            tokens.surface_card.b(),
+            egui::lerp(tokens.surface_card.a() as f32..=220.0, hover_t) as u8,
+        )
     };
-    let border = if selected {
-        Stroke::new(1.5_f32, tokens.primary)
+
+    let border_color = if selected {
+        tokens.primary
     } else {
-        Stroke::new(1.0_f32, tokens.border_glass)
+        tokens.border_glass.lerp_to_gamma(tokens.primary, hover_t * 0.5)
+    };
+    let border_stroke = Stroke::new(if selected { 1.5_f32 } else { 1.0_f32 }, border_color);
+
+    let fg = if selected {
+        tokens.primary
+    } else {
+        tokens.text_muted.lerp_to_gamma(tokens.text_primary, hover_t)
     };
 
-    let btn = egui::Button::new(
-        RichText::new(text)
-            .size(12.5)
-            .color(fg)
-            .strong(),
-    )
-    .fill(bg)
-    .stroke(border)
-    .rounding(Rounding::same(10.0))
-    .min_size(Vec2::new(0.0, 32.0));
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, Rounding::same(10.0), bg);
+    painter.rect_stroke(rect, Rounding::same(10.0), border_stroke);
 
-    ui.add(btn).clicked()
+    let mut start_x = rect.min.x + 11.0;
+    if let Some(nic) = native_icon {
+        let icon_rect = Rect::from_center_size(
+            Pos2::new(start_x + 7.0, rect.center().y),
+            Vec2::splat(14.0),
+        );
+        paint_native_icon(&painter, icon_rect, nic, fg, 1.4);
+        start_x += 16.0 + 6.0;
+    }
+
+    let text_pos = Pos2::new(start_x, rect.center().y - galley.size().y * 0.5);
+    painter.text(
+        text_pos,
+        Align2::LEFT_TOP,
+        text,
+        FontId::proportional(12.5),
+        fg,
+    );
+
+    if hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    resp.clicked()
 }
 
 /// Async Cover & Icon Renderer backed by CoverImageCache + GPU TextureHandle cache
@@ -468,56 +602,22 @@ fn draw_cover_placeholder(
     painter: &egui::Painter,
     rect: Rect,
     tokens: &GlassTokens,
-    title: &str,
+    _title: &str,
     loading: bool,
     rounding: f32,
 ) {
-    let mut hash: u32 = 5381;
-    for b in title.bytes() {
-        hash = hash.wrapping_mul(33).wrapping_add(b as u32);
-    }
-    let [pr, pg, pb, _] = tokens.primary.to_array();
-    let tint = Color32::from_rgba_unmultiplied(
-        pr.saturating_sub(((hash & 0x1F) as u8) / 2),
-        pg.saturating_sub((((hash >> 5) & 0x1F) as u8) / 2),
-        pb,
-        28,
-    );
-    painter.rect_filled(rect, Rounding::same(rounding), tint);
+    // Pristine, clean background surface
+    painter.rect_filled(rect, Rounding::same(rounding), tokens.surface_card);
 
-    let initials: String = title
-        .split_whitespace()
-        .filter_map(|w| w.chars().next())
-        .take(2)
-        .collect::<String>()
-        .to_uppercase();
-    let badge_text = if initials.is_empty() {
-        "📚".to_string()
+    // Subtle, clean native vector book icon in the center - absolutely NO text, initials, or badges
+    let icon_size = (rect.width().min(rect.height()) * 0.22).clamp(16.0, 32.0);
+    let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(icon_size));
+    let icon_color = if loading {
+        tokens.primary.gamma_multiply(0.45)
     } else {
-        initials
+        tokens.text_muted.gamma_multiply(0.3)
     };
-
-    let center = rect.center();
-    let circle_r = (rect.width().min(rect.height()) * 0.24).clamp(12.0, 28.0);
-    painter.circle_filled(center, circle_r, tokens.primary_container);
-    painter.circle_stroke(center, circle_r, Stroke::new(1.0_f32, tokens.border_glow));
-    painter.text(
-        center,
-        Align2::CENTER_CENTER,
-        badge_text,
-        FontId::proportional((circle_r * 0.78).clamp(10.0, 18.0)),
-        tokens.primary,
-    );
-
-    if loading && rect.height() > 80.0 {
-        painter.text(
-            Pos2::new(center.x, rect.max.y - 18.0),
-            Align2::CENTER_CENTER,
-            "Loading cover…",
-            FontId::proportional(10.0),
-            tokens.text_muted,
-        );
-    }
+    paint_native_icon(painter, icon_rect, NativeIcon::Book, icon_color, 1.4);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -690,7 +790,14 @@ pub fn floating_continue_button(
                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                     }
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("▶").size(18.0).color(tokens.on_primary).strong());
+                        let (icon_rect, _) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::hover());
+                        paint_native_icon(
+                            &ui.painter_at(icon_rect),
+                            icon_rect,
+                            NativeIcon::Play,
+                            tokens.on_primary,
+                            1.8_f32,
+                        );
                         ui.add_space(6.0);
                         ui.vertical(|ui| {
                             let short_title = truncate_str(&manga.title, 26);

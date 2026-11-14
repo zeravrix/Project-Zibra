@@ -205,28 +205,37 @@ pub struct JvmHostSource {
     pub lang_str: String,
     pub base_url_str: String,
     pub tags_vec: Vec<SourceTag>,
+    pub rank: u32,
 }
 
 impl JvmHostSource {
     pub fn new(client: Arc<JvmHostClient>, info: &HostSourceInfo) -> Self {
-        let mut tags = Vec::new();
-        let lang = info.language.to_lowercase();
-        if lang == "ar" {
-            tags.push(SourceTag::Arabic);
-        } else if lang == "en" {
-            tags.push(SourceTag::English);
-        } else if lang == "fr" {
-            tags.push(SourceTag::French);
-        } else if lang == "es" {
-            tags.push(SourceTag::Spanish);
-        } else if lang == "ko" {
-            tags.push(SourceTag::Korean);
-        } else if lang == "ja" {
-            tags.push(SourceTag::Japanese);
+        Self::with_rank(client, info, 10)
+    }
+
+    pub fn with_rank(client: Arc<JvmHostClient>, info: &HostSourceInfo, rank: u32) -> Self {
+        let lang = if info.language.trim().is_empty() {
+            "multi".to_string()
         } else {
-            tags.push(SourceTag::MultiLang);
+            info.language.to_lowercase()
+        };
+        let mut tags = Vec::new();
+        match lang.as_str() {
+            "ar" => tags.push(SourceTag::Arabic),
+            "en" => tags.push(SourceTag::English),
+            "fr" => tags.push(SourceTag::French),
+            "es" => tags.push(SourceTag::Spanish),
+            "ko" => tags.push(SourceTag::Korean),
+            "ja" => tags.push(SourceTag::Japanese),
+            _ => tags.push(SourceTag::MultiLang),
         }
         tags.push(SourceTag::VerifiedWorking);
+
+        let base_url_str = if info.base_url.starts_with("http://") || info.base_url.starts_with("https://") {
+            info.base_url.clone()
+        } else {
+            format!("https://{}.com", info.base_url.replace('_', "-"))
+        };
 
         let id_str = format!("KOTATSU_{}", info.id);
         Self {
@@ -234,9 +243,10 @@ impl JvmHostSource {
             raw_id: info.id,
             id_str,
             name_str: info.name.clone(),
-            lang_str: info.language.clone(),
-            base_url_str: info.base_url.clone(),
+            lang_str: lang,
+            base_url_str,
             tags_vec: tags,
+            rank,
         }
     }
 
@@ -296,7 +306,7 @@ impl Source for JvmHostSource {
         &self.base_url_str
     }
     fn priority_rank(&self) -> u32 {
-        10
+        self.rank
     }
     fn tags(&self) -> &[SourceTag] {
         &self.tags_vec

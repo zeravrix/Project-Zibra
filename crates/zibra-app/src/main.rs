@@ -290,10 +290,12 @@ impl ZibraApp {
         let library = LibraryStore::new(&app_dir).expect("Failed to open SQLite library");
         let registry = Arc::new(LiveSourceRegistry::new());
         let reg_for_jvm = registry.clone();
+        let egui_ctx = cc.egui_ctx.clone();
         rt.spawn(async move {
             match reg_for_jvm.bind_jvm_host().await {
                 Ok(count) if count > 0 => {
-                    eprintln!("[ZIBRA] Successfully bound {} Kotatsu sources via JVM host bridge", count);
+                    eprintln!("[ZIBRA] Successfully bound and upgraded {} Kotatsu sources via JVM host bridge", count);
+                    egui_ctx.request_repaint();
                 }
                 Ok(_) => {}
                 Err(e) => {
