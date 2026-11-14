@@ -30,6 +30,9 @@ pub fn run() {
             commands::get_downloads,
             commands::queue_download,
             commands::cancel_download,
+            commands::open_cloudflare_solver,
+            commands::save_source_cookies,
+            commands::get_source_cookies,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

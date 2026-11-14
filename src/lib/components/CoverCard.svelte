@@ -70,7 +70,7 @@
     <div class="meta">
       <p class="title">{title}</p>
       {#if manga.source_id}
-        <span class="source-tag">{manga.source_id.replace('kotatsu:', '')}</span>
+        <span class="source-tag">{manga.source_id.replace(/^[^:]+:/, '')}</span>
       {/if}
     </div>
   </div>

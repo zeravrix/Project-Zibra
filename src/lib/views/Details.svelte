@@ -4,7 +4,7 @@
   import { appState, goBack, openReader, notify } from '../stores/app.svelte.js';
   import { 
     ArrowLeft, Heart, Play, Download, BookOpen, 
-    Calendar, User, Tag, Check, Sparkles 
+    Calendar, User, Tag, Check, Sparkles, ShieldAlert 
   } from 'lucide-svelte';
 
   let manga = appState.activeManga;
@@ -47,6 +47,20 @@
       notify('Failed to load details: ' + e);
     } finally {
       loading = false;
+    }
+  }
+
+  async function handleSolveCloudflare() {
+    if (!manga) return;
+    try {
+      const targetUrl = manga.url || 'https://google.com';
+      await invoke('open_cloudflare_solver', {
+        url: targetUrl,
+        title: `${manga.title} — Cloudflare Verification`,
+      });
+      notify('Opening Cloudflare solver in webview...');
+    } catch (e) {
+      notify('Failed to open solver: ' + e);
     }
   }
 
@@ -120,7 +134,7 @@
             {#if manga.status}
               <span class="badge status">{manga.status}</span>
             {/if}
-            <span class="badge source">{manga.source_id.replace('kotatsu:', '')}</span>
+            <span class="badge source">{manga.source_id.replace(/^[^:]+:/, '')}</span>
           </div>
 
           <h1 class="manga-title">{manga.title}</h1>
@@ -145,6 +159,9 @@
             </button>
             <button class="icon-action-btn" class:fav={isFavorite} on:click={handleToggleFavorite}>
               <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+            <button class="icon-action-btn" title="Pass Cloudflare Challenge" on:click={handleSolveCloudflare}>
+              <ShieldAlert size={18} />
             </button>
           </div>
         </div>

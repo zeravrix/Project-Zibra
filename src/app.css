@@ -33,7 +33,7 @@
   --z-duration-normal: 250ms;
   --z-duration-slow: 400ms;
 
-  /* Primary Accent Defaults (Kotatsu Blue) */
+  /* Primary Accent Defaults (Zibrax Blue) */
   --z-accent: #4285f4;
   --z-accent-muted: rgba(66, 133, 244, 0.16);
   --z-accent-glow: rgba(66, 133, 244, 0.35);
@@ -90,7 +90,7 @@
   --z-reader-bg: #ffffff;
 }
 
-/* Kotatsu 13 Accent Colors */
+/* Material 13 Accent Colors */
 [data-accent="blue"] { --z-accent: #4285f4; --z-accent-muted: rgba(66, 133, 244, 0.18); --z-accent-glow: rgba(66, 133, 244, 0.35); }
 [data-accent="purple"] { --z-accent: #a855f7; --z-accent-muted: rgba(168, 85, 247, 0.18); --z-accent-glow: rgba(168, 85, 247, 0.35); }
 [data-accent="teal"] { --z-accent: #14b8a6; --z-accent-muted: rgba(20, 184, 166, 0.18); --z-accent-glow: rgba(20, 184, 166, 0.35); }

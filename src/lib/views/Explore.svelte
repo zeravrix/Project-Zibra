@@ -4,7 +4,20 @@
   import CoverGrid from '../components/CoverGrid.svelte';
   import SearchBar from '../components/SearchBar.svelte';
   import { appState, notify } from '../stores/app.svelte.js';
-  import { Compass, Globe, Sparkles, Flame, Clock, Filter } from 'lucide-svelte';
+  import { Compass, Globe, Sparkles, Flame, Clock, Filter, ShieldAlert } from 'lucide-svelte';
+
+  async function handleSolveCloudflare() {
+    if (!selectedSource) return;
+    try {
+      await invoke('open_cloudflare_solver', {
+        url: selectedSource.base_url,
+        title: `${selectedSource.name} — Cloudflare Verification`,
+      });
+      notify(`Opening Cloudflare solver for ${selectedSource.name}...`);
+    } catch (e) {
+      notify('Failed to open solver: ' + e);
+    }
+  }
 
   let sources = [];
   let selectedSource = null;
@@ -216,6 +229,16 @@
         <Clock size={16} />
         Latest Updates
       </button>
+      {#if selectedSource}
+        <button
+          class="tab-btn cloudflare-btn"
+          title="Open in-app WebView to solve Cloudflare challenge"
+          on:click={handleSolveCloudflare}
+        >
+          <ShieldAlert size={16} />
+          Pass Cloudflare
+        </button>
+      {/if}
     </div>
   {/if}
 

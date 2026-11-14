@@ -93,7 +93,7 @@
 
         <div class="setting-item">
           <div class="item-info">
-            <span class="item-label">Accent Palette (Kotatsu Themes)</span>
+            <span class="item-label">Accent Palette</span>
             <span class="item-desc">Highlights, cards bloom, active pills, and progress bars</span>
           </div>
           <div class="colors-row">

@@ -5,7 +5,6 @@
   "identifier": "org.zeravrix.zibra",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
@@ -13,6 +12,7 @@
     "windows": [
       {
         "title": "Zibrax • Native Manga & Manhwa Reader",
+        "url": "index.html",
         "width": 1240,
         "height": 780,
         "minWidth": 500,

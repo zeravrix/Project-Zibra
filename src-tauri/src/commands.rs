@@ -293,3 +293,64 @@ pub async fn queue_download(
 pub async fn cancel_download(_state: State<'_, AppState>, _chapter_id: String) -> Result<(), String> {
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_cloudflare_solver(
+    app: tauri::AppHandle,
+    url: String,
+    title: Option<String>,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+
+    if let Some(window) = app.get_webview_window("cloudflare-solver") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.navigate(parsed_url);
+        return Ok(());
+    }
+
+    let win_title = title.unwrap_or_else(|| "Cloudflare Verification — Zibrax".to_string());
+    let _ = tauri::WebviewWindowBuilder::new(
+        &app,
+        "cloudflare-solver",
+        tauri::WebviewUrl::External(parsed_url),
+    )
+    .title(win_title)
+    .inner_size(960.0, 720.0)
+    .center()
+    .resizable(true)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_source_cookies(
+    state: State<'_, AppState>,
+    source_id: String,
+    cookie: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let mut settings = state.settings_store.load();
+    settings.custom_source_cookies.insert(source_id, cookie.clone());
+    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+
+    if let Some(u) = base_url {
+        if let Ok(parsed) = u.parse::<url::Url>() {
+            state.cookie_jar.add_cookie_str(&cookie, &parsed);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_source_cookies(
+    state: State<'_, AppState>,
+    source_id: String,
+) -> Result<String, String> {
+    let settings = state.settings_store.load();
+    Ok(settings.custom_source_cookies.get(&source_id).cloned().unwrap_or_default())
+}
+

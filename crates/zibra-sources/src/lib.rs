@@ -2,7 +2,6 @@ pub mod catalog;
 pub mod catalog_data;
 pub mod engines;
 pub mod extractor;
-pub mod jvm_host;
 pub mod registry;
 
 use async_trait::async_trait;
