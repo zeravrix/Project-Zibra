@@ -1,16 +1,19 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { appState, goBack, notify } from '../stores/app.svelte.js';
   import { 
     ArrowLeft, Settings, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-    Sun, Moon, Eye, Sliders, Maximize2, Minimize2, RotateCcw
+    Sun, Moon, Eye, Sliders, Maximize2, Minimize2, RotateCcw, ShieldAlert
   } from 'lucide-svelte';
 
   let manga = appState.activeManga;
   let chapter = appState.activeChapter;
   let pages = [];
   let loading = true;
+  let loadError = null;
+  let unlistenCf = null;
   let currentPageIndex = 0;
   let showHud = true;
   let showSettings = false; // Toggled by TAB key!
@@ -28,24 +31,45 @@
   async function loadPages() {
     if (!manga || !chapter) return;
     loading = true;
+    loadError = null;
     try {
       pages = await invoke('get_pages', {
         sourceId: manga.source_id,
         chapter,
       });
 
-      // Try to restore saved progress
-      try {
-        const prog = await invoke('get_reading_progress', { mangaId: manga.id });
-        if (prog && prog.chapter_id === chapter.id && prog.page_index < pages.length) {
-          currentPageIndex = prog.page_index;
-        }
-      } catch (_) {}
+      if (!pages || pages.length === 0) {
+        loadError = 'No images returned for this chapter.';
+      } else {
+        // Try to restore saved progress
+        try {
+          const prog = await invoke('get_reading_progress', { mangaId: manga.id });
+          if (prog && prog.chapter_id === chapter.id && prog.page_index < pages.length) {
+            currentPageIndex = prog.page_index;
+          }
+        } catch (_) {}
+      }
     } catch (e) {
       console.error('Failed to load chapter pages:', e);
+      loadError = String(e);
       notify('Failed to load pages: ' + e);
     } finally {
       loading = false;
+    }
+  }
+
+  async function handleSolveCloudflare() {
+    if (!manga) return;
+    try {
+      const targetUrl = chapter?.url || manga.url || 'https://google.com';
+      await invoke('open_cloudflare_solver', {
+        url: targetUrl,
+        title: `${manga.title} — Cloudflare Verification`,
+        sourceId: manga.source_id,
+      });
+      notify('Opening Cloudflare solver in light browser...');
+    } catch (e) {
+      notify('Solver error: ' + e);
     }
   }
 
@@ -137,15 +161,24 @@
     }, 4500);
   }
 
-  onMount(() => {
+  onMount(async () => {
     window.addEventListener('keydown', handleKeydown);
     loadPages();
+    try {
+      unlistenCf = await listen('cloudflare-solved', (event) => {
+        if (event.payload?.source_id === manga?.source_id) {
+          notify('Cloudflare verification passed! Reloading pages...');
+          loadPages();
+        }
+      });
+    } catch (_) {}
   });
 
   onDestroy(() => {
     window.removeEventListener('keydown', handleKeydown);
     clearTimeout(hudTimeout);
     saveCurrentProgress();
+    if (unlistenCf) unlistenCf();
   });
 </script>
 
@@ -171,6 +204,13 @@
       <span class="page-counter">{currentPageIndex + 1} / {pages.length}</span>
       <button
         class="hud-btn"
+        on:click={handleSolveCloudflare}
+        title="Pass Cloudflare Challenge (Light Browser)"
+      >
+        <ShieldAlert size={18} />
+      </button>
+      <button
+        class="hud-btn"
         class:active={showSettings}
         on:click={() => showSettings = !showSettings}
         title="Settings (Tab key)"
@@ -190,6 +230,27 @@
       <div class="loading-state">
         <div class="spinner"></div>
         <p>Loading chapter pages...</p>
+      </div>
+    {:else if loadError || pages.length === 0}
+      <div class="reader-error-state" on:click|stopPropagation>
+        <ShieldAlert size={44} class="cf-alert-icon" />
+        <h2>Unable to load chapter images</h2>
+        <p class="error-msg">{loadError || 'Empty page list returned.'}</p>
+        <p class="error-sub">This source may require passing a Cloudflare challenge or captcha check.</p>
+        <div class="error-btn-row">
+          <button class="cf-solve-btn" on:click={handleSolveCloudflare}>
+            <ShieldAlert size={18} />
+            Pass Cloudflare (Light Browser)
+          </button>
+          <button class="cf-retry-btn" on:click={loadPages}>
+            <RotateCcw size={16} />
+            Retry
+          </button>
+          <button class="cf-back-btn" on:click={goBack}>
+            <ArrowLeft size={16} />
+            Back
+          </button>
+        </div>
       </div>
     {:else if readerMode === 'webtoon'}
       <!-- Continuous Webtoon Strip -->
@@ -596,5 +657,88 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  .reader-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    padding: var(--z-space-8);
+    text-align: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  :global(.cf-alert-icon) {
+    color: #a78bfa;
+    margin-bottom: var(--z-space-4);
+  }
+
+  .reader-error-state h2 {
+    font-size: var(--z-text-xl);
+    font-weight: 700;
+    color: var(--z-text);
+    margin-bottom: var(--z-space-2);
+  }
+
+  .error-msg {
+    font-size: var(--z-text-sm);
+    color: #ef4444;
+    margin-bottom: var(--z-space-2);
+  }
+
+  .error-sub {
+    font-size: var(--z-text-xs);
+    color: var(--z-text-muted);
+    line-height: 1.5;
+    margin-bottom: var(--z-space-6);
+  }
+
+  .error-btn-row {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-3);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .cf-solve-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #7c3aed;
+    color: #ffffff;
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: var(--z-radius-md);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .cf-solve-btn:hover {
+    background: #6d28d9;
+  }
+
+  .cf-retry-btn, .cf-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--z-surface-raised);
+    color: var(--z-text);
+    border: 1px solid var(--z-border);
+    font-size: var(--z-text-xs);
+    font-weight: 500;
+    padding: 10px 16px;
+    border-radius: var(--z-radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .cf-retry-btn:hover, .cf-back-btn:hover {
+    background: var(--z-border-hover);
   }
 </style>

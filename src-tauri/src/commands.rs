@@ -343,7 +343,7 @@ pub async fn open_cloudflare_solver(
         return Ok(());
     }
 
-    let win_title = title.unwrap_or_else(|| "Cloudflare Verification — Zibrax".to_string());
+    let win_title = title.unwrap_or_else(|| "Cloudflare Captcha Solver — Zibrax".to_string());
     let app_handle = app.clone();
     let src_id = source_id.unwrap_or_else(|| {
         parsed_url.host_str().unwrap_or("unknown").to_string()
@@ -352,40 +352,95 @@ pub async fn open_cloudflare_solver(
 
     let init_script = r#"
         (function() {
-            function initZibraOverlay() {
-                if (document.getElementById('zibra-solver-ui')) return;
-                const overlay = document.createElement('div');
-                overlay.id = 'zibra-solver-ui';
-                overlay.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(18,18,24,0.96);backdrop-filter:blur(12px);color:#f4f4f5;padding:12px 18px;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,0.7);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;display:flex;align-items:center;gap:12px;border:1px solid #7c3aed;';
+            function initZibraBar() {
+                if (document.getElementById('zibra-lightbrowser-header')) return;
+                
+                try {
+                    document.documentElement.style.setProperty('margin-top', '52px', 'important');
+                } catch (_) {}
 
-                const label = document.createElement('div');
-                label.innerHTML = '<span style="color:#c4b5fd;font-weight:700;display:block;">🛡️ Zibrax Cloudflare Pass</span><span style="color:#a1a1aa;font-size:11px;">Solve challenge, then click sync</span>';
+                const header = document.createElement('div');
+                header.id = 'zibra-lightbrowser-header';
+                header.style.cssText = 'position:fixed;top:0;left:0;right:0;height:50px;z-index:2147483647;background:#13131a;color:#f4f4f5;border-bottom:2px solid #8b5cf6;display:flex;align-items:center;justify-content:space-between;padding:0 14px;box-shadow:0 4px 20px rgba(0,0,0,0.8);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;box-sizing:border-box;';
 
-                const btn = document.createElement('button');
-                btn.innerText = 'Sync & Return';
-                btn.style.cssText = 'background:#7c3aed;color:#ffffff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;transition:background 0.2s;';
-                btn.onmouseover = () => { btn.style.background = '#6d28d9'; };
-                btn.onmouseout = () => { btn.style.background = '#7c3aed'; };
-                btn.onclick = () => {
-                    btn.innerText = 'Syncing...';
+                const leftGroup = document.createElement('div');
+                leftGroup.style.cssText = 'display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden;';
+
+                const iconTitle = document.createElement('div');
+                iconTitle.innerHTML = '<span style="font-size:16px;">🛡️</span> <strong style="font-size:13px;color:#c4b5fd;white-space:nowrap;">Captcha Solver</strong>';
+                iconTitle.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+                const statusMsg = document.createElement('span');
+                statusMsg.id = 'zibra-status-msg';
+                statusMsg.innerText = 'Click the captcha checkbox below';
+                statusMsg.style.cssText = 'font-size:11px;color:#a1a1aa;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:180px;';
+
+                leftGroup.appendChild(iconTitle);
+                leftGroup.appendChild(statusMsg);
+
+                const rightGroup = document.createElement('div');
+                rightGroup.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+
+                const reloadBtn = document.createElement('button');
+                reloadBtn.innerText = '↻';
+                reloadBtn.title = 'Reload page';
+                reloadBtn.style.cssText = 'background:#27272a;color:#d4d4d8;border:1px solid #3f3f46;border-radius:6px;width:30px;height:30px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+                reloadBtn.onclick = () => window.location.reload();
+
+                const syncBtn = document.createElement('button');
+                syncBtn.id = 'zibra-sync-btn';
+                syncBtn.innerText = '✓ Done & Sync';
+                syncBtn.style.cssText = 'background:#8b5cf6;color:#ffffff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;';
+                
+                let synced = false;
+                function doSync(auto) {
+                    if (synced) return;
+                    synced = true;
+                    syncBtn.innerText = auto ? '✓ Solved! Syncing...' : 'Syncing...';
+                    syncBtn.style.background = '#10b981';
+                    statusMsg.innerText = 'Syncing cookies and closing...';
+                    statusMsg.style.color = '#34d399';
                     const c = document.cookie || '';
-                    window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c);
-                };
-
-                overlay.appendChild(label);
-                overlay.appendChild(btn);
-                if (document.body) {
-                    document.body.appendChild(overlay);
+                    const ua = navigator.userAgent || '';
+                    setTimeout(() => {
+                        window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c) + '&ua=' + encodeURIComponent(ua);
+                    }, 500);
                 }
+
+                syncBtn.onclick = () => doSync(false);
+
+                rightGroup.appendChild(reloadBtn);
+                rightGroup.appendChild(syncBtn);
+
+                header.appendChild(leftGroup);
+                header.appendChild(rightGroup);
+
+                if (document.body) {
+                    document.body.prepend(header);
+                } else if (document.documentElement) {
+                    document.documentElement.appendChild(header);
+                }
+
+                const checkInterval = setInterval(() => {
+                    if (synced) {
+                        clearInterval(checkInterval);
+                        return;
+                    }
+                    const c = document.cookie || '';
+                    if (c.includes('cf_clearance')) {
+                        clearInterval(checkInterval);
+                        doSync(true);
+                    }
+                }, 600);
             }
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initZibraOverlay);
+                document.addEventListener('DOMContentLoaded', initZibraBar);
             } else {
-                initZibraOverlay();
+                initZibraBar();
             }
-            setTimeout(initZibraOverlay, 1500);
-            setTimeout(initZibraOverlay, 3500);
+            setTimeout(initZibraBar, 1000);
+            setTimeout(initZibraBar, 2500);
         })();
     "#;
 
@@ -395,9 +450,10 @@ pub async fn open_cloudflare_solver(
         tauri::WebviewUrl::External(parsed_url),
     )
     .title(win_title)
-    .inner_size(960.0, 720.0)
+    .inner_size(520.0, 700.0)
     .center()
     .resizable(true)
+    .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
     .initialization_script(init_script)
     .on_navigation(move |nav_url| {
         if nav_url.host_str() == Some("zibra.local") && nav_url.path() == "/sync-cf" {

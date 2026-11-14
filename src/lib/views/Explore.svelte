@@ -311,6 +311,22 @@
         emptyMessage={searchQuery ? 'No manga matching your search.' : 'No titles available.'}
       />
 
+      {#if !loading && mangaList.length === 0 && selectedSource}
+        <div class="empty-cf-banner">
+          <ShieldAlert size={32} class="empty-cf-icon" />
+          <div class="empty-cf-info">
+            <h3 class="empty-cf-title">No titles received from {selectedSource.name}</h3>
+            <p class="empty-cf-desc">
+              If this source is protected by Cloudflare Turnstile or anti-bot checks, open the lightweight browser to pass the captcha.
+            </p>
+          </div>
+          <button class="empty-cf-action" on:click={handleSolveCloudflare}>
+            <ShieldAlert size={16} />
+            Pass Cloudflare (Light Browser)
+          </button>
+        </div>
+      {/if}
+
       {#if hasNextPage && !searchQuery && mangaList.length > 0}
         <div class="load-more">
           <button class="load-btn" on:click={() => loadMangas(currentPage + 1, true)}>
@@ -534,6 +550,72 @@
     background: var(--z-accent-muted);
     color: var(--z-accent);
     font-weight: 600;
+  }
+
+  .tab-btn.cloudflare-btn {
+    margin-left: auto;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #c4b5fd;
+  }
+
+  .tab-btn.cloudflare-btn:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: #8b5cf6;
+    color: #ffffff;
+  }
+
+  .empty-cf-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-4);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: var(--z-radius-lg);
+    padding: var(--z-space-5) var(--z-space-6);
+    margin: var(--z-space-6) 0;
+  }
+
+  :global(.empty-cf-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .empty-cf-info {
+    flex: 1;
+  }
+
+  .empty-cf-title {
+    font-size: var(--z-text-base);
+    font-weight: 700;
+    color: var(--z-text);
+    margin-bottom: 4px;
+  }
+
+  .empty-cf-desc {
+    font-size: var(--z-text-xs);
+    color: var(--z-text-muted);
+    line-height: 1.5;
+  }
+
+  .empty-cf-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #7c3aed;
+    color: #ffffff;
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--z-radius-md);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .empty-cf-action:hover {
+    background: #6d28d9;
   }
 
   .content-area {

@@ -210,11 +210,12 @@
               <Play size={18} fill="currentColor" />
               <span>{progress ? 'Continue Reading' : 'Start Reading'}</span>
             </button>
-            <button class="icon-action-btn" class:fav={isFavorite} on:click={handleToggleFavorite}>
+            <button class="icon-action-btn" class:fav={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? "In Library" : "Add to Library"}>
               <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
             </button>
-            <button class="icon-action-btn" title="Pass Cloudflare Challenge" on:click={handleSolveCloudflare}>
-              <ShieldAlert size={18} />
+            <button class="cf-action-btn" title="Open light browser to pass Cloudflare challenge" on:click={handleSolveCloudflare}>
+              <ShieldAlert size={16} />
+              <span>Pass Cloudflare</span>
             </button>
           </div>
         </div>
@@ -243,6 +244,18 @@
         <div class="loading-chapters">
           <div class="spinner" />
           <p>Fetching chapter list...</p>
+        </div>
+      {:else if displayedChapters.length === 0}
+        <div class="empty-cf-banner">
+          <ShieldAlert size={28} class="empty-cf-icon" />
+          <div class="empty-cf-info">
+            <h3 class="empty-cf-title">No chapters available or access restricted</h3>
+            <p class="empty-cf-desc">If this source is protected by Cloudflare Turnstile, click below to open the light browser and pass the check.</p>
+          </div>
+          <button class="empty-cf-action" on:click={handleSolveCloudflare}>
+            <ShieldAlert size={16} />
+            Pass Cloudflare (Light Browser)
+          </button>
         </div>
       {:else}
         <div class="chapters-list">
@@ -518,6 +531,80 @@
 
   .icon-action-btn:hover {
     background: var(--z-border-hover);
+  }
+
+  .cf-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: var(--z-radius-md);
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .cf-action-btn:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: #8b5cf6;
+    color: #ffffff;
+  }
+
+  .empty-cf-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-4);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: var(--z-radius-lg);
+    padding: var(--z-space-5) var(--z-space-6);
+    margin: var(--z-space-6) 0;
+  }
+
+  :global(.empty-cf-icon) {
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
+
+  .empty-cf-info {
+    flex: 1;
+  }
+
+  .empty-cf-title {
+    font-size: var(--z-text-base);
+    font-weight: 700;
+    color: var(--z-text);
+    margin-bottom: 4px;
+  }
+
+  .empty-cf-desc {
+    font-size: var(--z-text-xs);
+    color: var(--z-text-muted);
+    line-height: 1.5;
+  }
+
+  .empty-cf-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #7c3aed;
+    color: #ffffff;
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--z-radius-md);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .empty-cf-action:hover {
+    background: #6d28d9;
   }
 
   .body-section {
