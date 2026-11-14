@@ -41,7 +41,7 @@
     {/if}
   </main>
 
-  {#if appState.currentScreen !== 'reader' && appState.currentScreen !== 'details'}
+  {#if appState.currentScreen === 'history'}
     <FloatingContinue />
   {/if}
 

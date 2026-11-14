@@ -89,7 +89,7 @@ impl Source for TeamXSource {
         let html = self.fetch_html(&url).await?;
         let items = self.parse_cards(&html, "div.listupd div.bsx, div.bsx", &url);
         Ok(MangaPageResult {
-            has_next_page: items.len() >= 10,
+            has_next_page: !items.is_empty(),
             items,
         })
     }
@@ -100,7 +100,7 @@ impl Source for TeamXSource {
         let html = self.fetch_html(&url).await?;
         let items = self.parse_cards(&html, "div.last-chapter div.box, div.bsx", &url);
         Ok(MangaPageResult {
-            has_next_page: items.len() >= 10,
+            has_next_page: !items.is_empty(),
             items,
         })
     }

@@ -169,7 +169,7 @@ impl MadaraEngine {
     async fn fetch_archive(&self, page: u32, order: &str, query: Option<&str>) -> anyhow::Result<MangaPageResult> {
         let p = page.max(1);
         if let Some(items) = self.ajax_list(p, order, query).await {
-            let has_next_page = items.len() >= 10;
+            let has_next_page = !items.is_empty();
             return Ok(MangaPageResult { items, has_next_page });
         }
         let candidates = if let Some(q) = query.filter(|s| !s.trim().is_empty()) {
@@ -239,7 +239,7 @@ impl MadaraEngine {
             }
         }
 
-        let has_next = items.len() >= 10;
+        let has_next = !items.is_empty();
         Ok(MangaPageResult {
             items,
             has_next_page: has_next,

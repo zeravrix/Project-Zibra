@@ -2,11 +2,10 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { openManga } from '../stores/app.svelte.js';
-  import { Play, X, BookOpen } from 'lucide-svelte';
+  import { Play, BookOpen } from 'lucide-svelte';
 
   let recentManga = null;
   let recentProgress = null;
-  let dismissed = false;
 
   async function checkRecentRead() {
     try {
@@ -33,7 +32,7 @@
   });
 </script>
 
-{#if recentManga && !dismissed}
+{#if recentManga}
   <div class="floating-continue-card" on:click={handleContinue}>
     <div class="thumb-wrap">
       {#if recentManga.cover_url}
@@ -58,14 +57,6 @@
 
     <button class="play-action-btn" title="Resume reading">
       <Play size={16} fill="currentColor" />
-    </button>
-
-    <button
-      class="dismiss-btn"
-      title="Dismiss"
-      on:click|stopPropagation={() => (dismissed = true)}
-    >
-      <X size={14} />
     </button>
   </div>
 {/if}
@@ -187,32 +178,5 @@
   .floating-continue-card:hover .play-action-btn {
     transform: scale(1.1);
     background: #1d4ed8;
-  }
-
-  .dismiss-btn {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #27272a;
-    border: 1px solid #3f3f46;
-    color: #a1a1aa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.2s ease, background 0.2s ease;
-  }
-
-  .floating-continue-card:hover .dismiss-btn {
-    opacity: 1;
-  }
-
-  .dismiss-btn:hover {
-    background: #3f3f46;
-    color: #ffffff;
   }
 </style>

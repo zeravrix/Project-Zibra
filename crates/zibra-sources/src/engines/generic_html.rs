@@ -236,7 +236,7 @@ impl GenericHtmlEngine {
         }
 
         Ok(MangaPageResult {
-            has_next_page: items.len() >= 10,
+            has_next_page: !items.is_empty(),
             items,
         })
     }

@@ -106,7 +106,7 @@ impl Source for SelfHostedServerSource {
             items.push(m);
         }
         Ok(MangaPageResult {
-            has_next_page: items.len() >= 20,
+            has_next_page: !items.is_empty(),
             items,
         })
     }

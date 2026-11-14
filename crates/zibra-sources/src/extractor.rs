@@ -31,13 +31,48 @@ pub fn parse_chapter_number(text: &str) -> Option<f32> {
 pub fn normalize_cover_url(raw: &str) -> String {
     let cleaned_ws: String = raw.trim().chars().filter(|c| !c.is_control()).collect();
     let cleaned = THUMB_SIZE_REGEX.replace_all(&cleaned_ws, "$1");
-    cleaned
+    let mut s = cleaned
         .replace("/thumb/", "/")
         .replace("/thumbs/", "/")
-        .replace(" ", "%20")
+        .replace(" ", "%20");
+    // Strip thumbnail resizing queries that downgrade covers to blurry 150px thumbnails
+    if let Some(pos) = s.find("?resize=") {
+        s.truncate(pos);
+    } else if let Some(pos) = s.find("?w=") {
+        s.truncate(pos);
+    } else if let Some(pos) = s.find("?fit=") {
+        s.truncate(pos);
+    } else if let Some(pos) = s.find("?zoom=") {
+        s.truncate(pos);
+    }
+    s
 }
 
 pub fn extract_best_image_url(el: ElementRef<'_>, base_url: &str) -> Option<String> {
+    // Check srcset first for maximum resolution cover
+    if let Some(srcset) = el.value().attr("srcset").or_else(|| el.value().attr("data-srcset")) {
+        let best = srcset
+            .split(',')
+            .filter_map(|token| {
+                let mut parts = token.trim().split_whitespace();
+                let raw_url = parts.next()?;
+                let score = parts
+                    .next()
+                    .and_then(|s| s.trim_end_matches('w').trim_end_matches('x').parse::<f32>().ok())
+                    .unwrap_or(1.0);
+                let resolved = resolve_url(base_url, raw_url)?;
+                if is_junk_asset(&resolved) {
+                    return None;
+                }
+                Some((resolved, score))
+            })
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(u, _)| normalize_cover_url(&u));
+        if best.is_some() {
+            return best;
+        }
+    }
+
     let attrs = [
         "data-original",
         "data-full",
@@ -68,29 +103,6 @@ pub fn extract_best_image_url(el: ElementRef<'_>, base_url: &str) -> Option<Stri
                     return Some(normalize_cover_url(&resolved));
                 }
             }
-        }
-    }
-
-    if let Some(srcset) = el.value().attr("srcset").or_else(|| el.value().attr("data-srcset")) {
-        let best = srcset
-            .split(',')
-            .filter_map(|token| {
-                let mut parts = token.trim().split_whitespace();
-                let raw_url = parts.next()?;
-                let score = parts
-                    .next()
-                    .and_then(|s| s.trim_end_matches('w').trim_end_matches('x').parse::<f32>().ok())
-                    .unwrap_or(1.0);
-                let resolved = resolve_url(base_url, raw_url)?;
-                if is_junk_asset(&resolved) {
-                    return None;
-                }
-                Some((resolved, score))
-            })
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(u, _)| normalize_cover_url(&u));
-        if best.is_some() {
-            return best;
         }
     }
 

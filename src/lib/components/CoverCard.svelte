@@ -1,13 +1,18 @@
 <script>
-  import { BookOpen, Heart } from 'lucide-svelte';
+  import { BookOpen, Heart, Copy, Trash2 } from 'lucide-svelte';
+  import ContextMenu from './ContextMenu.svelte';
+  import { openManga, notify } from '../stores/app.svelte.js';
 
   export let manga;
   export let progress = 0; // 0 to 1
   export let isFavorite = false;
   export let onToggleFavorite = null;
+  export let onDelete = null;
 
   let loaded = false;
   let error = false;
+  let showMenu = false;
+  let menuPos = { x: 0, y: 0 };
 
   const coverUrl = manga.cover_url || '';
   const title = manga.title || 'Untitled';
@@ -15,12 +20,50 @@
   function handleKeydown(e) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      // Click event will be handled by parent
     }
   }
+
+  function handleContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    menuPos = { x: e.clientX, y: e.clientY };
+    showMenu = true;
+  }
+
+  $: menuItems = [
+    {
+      label: isFavorite ? "Remove from Favourites" : "Add to Favourites",
+      icon: Heart,
+      action: () => onToggleFavorite?.(manga),
+    },
+    {
+      label: "Open Details",
+      icon: BookOpen,
+      action: () => openManga(manga),
+    },
+    {
+      label: "Copy Title",
+      icon: Copy,
+      action: () => {
+        if (navigator?.clipboard?.writeText) {
+          navigator.clipboard.writeText(manga.title);
+          notify("Copied title to clipboard");
+        }
+      },
+    },
+    ...(onDelete ? [
+      { divider: true },
+      {
+        label: "Remove from History",
+        icon: Trash2,
+        danger: true,
+        action: () => onDelete?.(manga),
+      }
+    ] : [])
+  ];
 </script>
 
-<div class="card-container">
+<div class="card-container" on:contextmenu={handleContextMenu}>
   <div
     class="card"
     role="button"
@@ -82,6 +125,15 @@
       <p class="title">{title}</p>
     </div>
   </div>
+
+  {#if showMenu}
+    <ContextMenu
+      x={menuPos.x}
+      y={menuPos.y}
+      items={menuItems}
+      onClose={() => (showMenu = false)}
+    />
+  {/if}
 </div>
 
 <style>
@@ -111,15 +163,17 @@
     overflow: hidden;
     position: relative;
     background: var(--z-surface-raised);
-    box-shadow: var(--z-shadow-card);
-    transition: box-shadow var(--z-duration-normal) var(--z-ease-out),
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform var(--z-duration-normal) var(--z-ease-spring),
+                box-shadow var(--z-duration-normal) var(--z-ease-out),
                 border-color var(--z-duration-normal) var(--z-ease-out);
-    border: 1px solid var(--z-border);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .card:hover .cover-wrapper {
-    box-shadow: var(--z-shadow-card-hover);
-    border-color: var(--z-border-hover);
+    box-shadow: 0 18px 40px -6px rgba(0, 0, 0, 0.8), 0 0 24px var(--z-accent-glow);
+    border-color: rgba(255, 255, 255, 0.22);
+    transform: translateY(-4px);
   }
 
   img {
@@ -129,7 +183,10 @@
     opacity: 0;
     transition: opacity var(--z-duration-normal) var(--z-ease-out),
                 transform var(--z-duration-slow) var(--z-ease-out);
-    image-rendering: high-quality;
+    image-rendering: auto;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    transform: translateZ(0);
   }
 
   img.loaded {

@@ -4,10 +4,12 @@
   import { listen } from '@tauri-apps/api/event';
   import CoverGrid from '../components/CoverGrid.svelte';
   import EmptyState from '../components/EmptyState.svelte';
+  import ContextMenu from '../components/ContextMenu.svelte';
   import { appState, notify } from '../stores/app.svelte.js';
   import { 
     Compass, Globe, Flame, Clock, ShieldAlert, 
-    Search, ArrowLeft, Star, ExternalLink, RefreshCw 
+    Search, ArrowLeft, Star, ExternalLink, RefreshCw,
+    BookOpen, Copy
   } from 'lucide-svelte';
 
   export let initialMode = 'pinned'; // 'pinned' | 'catalog' | 'browse'
@@ -31,6 +33,10 @@
   let favoritesSet = new Set();
   let unlistenCf = null;
   let scrollContainer;
+  let catalogDisplayLimit = 60;
+  let showSourceMenu = false;
+  let sourceMenuPos = { x: 0, y: 0 };
+  let contextSource = null;
 
   const languages = ['ALL', 'en', 'ar', 'es', 'fr', 'id', 'ru', 'ja', 'ko', 'pt', 'tr', 'vi', 'de', 'it'];
 
@@ -65,6 +71,64 @@
       notify(`Pinned source to Explore`);
     }
     savePinnedIds();
+  }
+
+  function handleSourceContextMenu(e, source) {
+    e.preventDefault();
+    e.stopPropagation();
+    contextSource = source;
+    sourceMenuPos = { x: e.clientX, y: e.clientY };
+    showSourceMenu = true;
+  }
+
+  $: sourceMenuItems = contextSource ? [
+    {
+      label: pinnedSourceIds.includes(contextSource.id) ? "Unpin from Explore" : "Pin to Explore",
+      icon: Star,
+      action: () => togglePin(contextSource.id),
+    },
+    {
+      label: `Browse ${contextSource.name}`,
+      icon: BookOpen,
+      action: () => openSourceBrowser(contextSource),
+    },
+    {
+      label: "Solve Cloudflare (Light Browser)",
+      icon: ShieldAlert,
+      action: () => {
+        invoke('open_cloudflare_solver', {
+          url: contextSource.base_url,
+          title: `${contextSource.name} — Cloudflare Verification`,
+          sourceId: contextSource.id,
+        });
+        notify(`Opening lightweight solver for ${contextSource.name}...`);
+      },
+    },
+    { divider: true },
+    {
+      label: "Copy Website URL",
+      icon: Copy,
+      action: () => {
+        if (navigator?.clipboard?.writeText) {
+          navigator.clipboard.writeText(contextSource.base_url);
+          notify("Copied source URL to clipboard");
+        }
+      },
+    },
+    {
+      label: "Copy Source Name",
+      icon: Copy,
+      action: () => {
+        if (navigator?.clipboard?.writeText) {
+          navigator.clipboard.writeText(contextSource.name);
+          notify("Copied source name to clipboard");
+        }
+      },
+    }
+  ] : [];
+
+  $: if (sourceCatalogSearch || selectedLang) {
+    catalogDisplayLimit = 60;
   }
 
   async function loadSources() {
@@ -160,11 +224,18 @@
   }
 
   function handleScroll(e) {
-    if (viewMode !== 'browse' || loading || loadingMore || !hasNextPage) return;
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    // Trigger auto-load when within 350px of bottom
-    if (scrollTop + clientHeight >= scrollHeight - 350) {
-      loadMangas(currentPage + 1, true);
+    if (viewMode === 'catalog') {
+      if (scrollTop + clientHeight >= scrollHeight - 450) {
+        if (catalogDisplayLimit < filteredCatalogSources.length) {
+          catalogDisplayLimit = Math.min(filteredCatalogSources.length, catalogDisplayLimit + 40);
+        }
+      }
+    } else if (viewMode === 'browse') {
+      if (loading || loadingMore || !hasNextPage) return;
+      if (scrollTop + clientHeight >= scrollHeight - 450) {
+        loadMangas(currentPage + 1, true);
+      }
     }
   }
 
@@ -260,7 +331,11 @@
     {:else}
       <div class="sources-grid">
         {#each pinnedSources as source (source.id)}
-          <div class="source-card" on:click={() => openSourceBrowser(source)}>
+          <div
+            class="source-card"
+            on:click={() => openSourceBrowser(source)}
+            on:contextmenu={(e) => handleSourceContextMenu(e, source)}
+          >
             <div class="card-top">
               <div class="source-icon-wrap">
                 {#if source.icon_url}
@@ -346,8 +421,12 @@
       />
     {:else}
       <div class="sources-grid">
-        {#each filteredCatalogSources as source (source.id)}
-          <div class="source-card" on:click={() => openSourceBrowser(source)}>
+        {#each filteredCatalogSources.slice(0, catalogDisplayLimit) as source (source.id)}
+          <div
+            class="source-card"
+            on:click={() => openSourceBrowser(source)}
+            on:contextmenu={(e) => handleSourceContextMenu(e, source)}
+          >
             <div class="card-top">
               <div class="source-icon-wrap">
                 {#if source.icon_url}
@@ -376,6 +455,17 @@
           </div>
         {/each}
       </div>
+
+      {#if catalogDisplayLimit < filteredCatalogSources.length}
+        <div class="load-more-manual-wrap">
+          <button
+            class="load-more-btn"
+            on:click={() => (catalogDisplayLimit = Math.min(filteredCatalogSources.length, catalogDisplayLimit + 60))}
+          >
+            <span>Load More Sources (Showing {catalogDisplayLimit} of {filteredCatalogSources.length})</span>
+          </button>
+        </div>
+      {/if}
     {/if}
 
   <!-- VIEW 3: SOURCE MANHWA BROWSER (SELECTED SOURCE TITLES) -->
@@ -487,9 +577,28 @@
             <div class="mini-spinner"></div>
             <span>Auto-loading next page...</span>
           </div>
+        {:else if hasNextPage}
+          <div class="load-more-manual-wrap">
+            <button class="load-more-btn" on:click={() => loadMangas(currentPage + 1, true)}>
+              <span>Load More Titles (Page {currentPage + 1})</span>
+            </button>
+          </div>
+        {:else if mangaList.length > 0}
+          <div class="end-catalog-bar">
+            <span>✓ Reached end of {selectedSource?.name} • {mangaList.length} titles loaded</span>
+          </div>
         {/if}
       {/if}
     </div>
+  {/if}
+
+  {#if showSourceMenu}
+    <ContextMenu
+      x={sourceMenuPos.x}
+      y={sourceMenuPos.y}
+      items={sourceMenuItems}
+      onClose={() => (showSourceMenu = false)}
+    />
   {/if}
 </div>
 
@@ -666,21 +775,66 @@
   }
 
   .source-card {
-    background: rgba(18, 18, 26, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--z-border);
+    background: rgba(18, 18, 26, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--z-radius-lg);
     padding: var(--z-space-4);
     display: flex;
     flex-direction: column;
     cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .source-card:hover {
     transform: translateY(-4px);
     border-color: rgba(59, 130, 246, 0.5);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 24px rgba(59, 130, 246, 0.25);
+  }
+
+  .load-more-manual-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 24px 0 36px;
+    width: 100%;
+  }
+
+  .load-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: var(--z-radius-full);
+    color: #93c5fd;
+    font-size: var(--z-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .load-more-btn:hover {
+    background: rgba(37, 99, 235, 0.25);
+    border-color: #3b82f6;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 18px rgba(59, 130, 246, 0.3);
+  }
+
+  .end-catalog-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 28px 0 40px;
+    color: var(--z-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
   }
 
   .card-top {

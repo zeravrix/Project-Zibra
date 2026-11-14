@@ -67,11 +67,39 @@ export async function updateSettings(newSettings) {
   }
 }
 
+const PALETTE_COLORS = {
+  totoro: '#4285f4',
+  monet: '#38bdf8',
+  expressive: '#c084fc',
+  miku: '#06b6d4',
+  asuka: '#f87171',
+  mion: '#34d399',
+  rikka: '#a78bfa',
+  sakura: '#fb7185',
+  mamimi: '#60a5fa',
+  kanade: '#cbd5e1',
+  itsuka: '#fbbf24',
+  amoledvoid: '#3b82f6',
+  highcontrast: '#ffffff',
+  blue: '#4285f4',
+  purple: '#a855f7',
+  teal: '#14b8a6',
+  green: '#22c55e',
+  red: '#ef4444',
+  orange: '#f97316',
+  pink: '#ec4899',
+  yellow: '#eab308',
+};
+
 export function applyTheme(settings) {
   if (!settings) return;
   const root = document.documentElement;
   const theme = settings.is_amoled ? 'amoled' : (settings.app_theme?.toLowerCase() || 'dark');
   root.setAttribute('data-theme', theme);
-  const accent = settings.color_theme?.toLowerCase() || 'blue';
-  root.setAttribute('data-accent', accent);
+  const themeKey = String(settings.color_theme || 'totoro').toLowerCase();
+  const hex = PALETTE_COLORS[themeKey] || (themeKey.startsWith('#') ? themeKey : '#4285f4');
+  root.setAttribute('data-accent', themeKey);
+  root.style.setProperty('--z-accent', hex);
+  root.style.setProperty('--z-accent-glow', hex + '55');
+  root.style.setProperty('--z-accent-muted', hex + '22');
 }
