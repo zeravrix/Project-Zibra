@@ -48,106 +48,186 @@ pub fn paint_native_icon(
 
     match icon {
         NativeIcon::History => {
-            painter.circle_stroke(center, r, stroke);
+            painter.circle_stroke(center, r * 0.85, stroke);
+            painter.circle_filled(center, stroke_w * 0.9, color);
+            painter.line_segment([center, center + Vec2::new(r * 0.38, -r * 0.28)], stroke);
             painter.line_segment([center, center + Vec2::new(0.0, -r * 0.55)], stroke);
-            painter.line_segment([center, center + Vec2::new(r * 0.45, 0.0)], stroke);
         }
         NativeIcon::Favorites => {
-            let left_c = center + Vec2::new(-r * 0.35, -r * 0.25);
-            let right_c = center + Vec2::new(r * 0.35, -r * 0.25);
-            let sub_r = r * 0.42;
-            painter.circle_stroke(left_c, sub_r, stroke);
-            painter.circle_stroke(right_c, sub_r, stroke);
-            let bottom = center + Vec2::new(0.0, r * 0.75);
-            painter.line_segment([left_c + Vec2::new(-sub_r * 0.85, sub_r * 0.5), bottom], stroke);
-            painter.line_segment([right_c + Vec2::new(sub_r * 0.85, sub_r * 0.5), bottom], stroke);
+            let n_points = 32;
+            let mut points = Vec::with_capacity(n_points + 1);
+            let scale = r / 16.5;
+            for i in 0..=n_points {
+                let t = (i as f32 / n_points as f32) * std::f32::consts::TAU;
+                let sint = t.sin();
+                let x = 16.0 * sint * sint * sint;
+                let y = -(13.0 * t.cos() - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos());
+                points.push(center + Vec2::new(x * scale, (y + 1.8) * scale));
+            }
+            painter.add(egui::epaint::PathShape::line(points, stroke));
         }
         NativeIcon::Explore => {
-            painter.circle_stroke(center, r, stroke);
-            let tip_n = center + Vec2::new(0.0, -r * 0.65);
-            let tip_s = center + Vec2::new(0.0, r * 0.65);
-            let tip_e = center + Vec2::new(r * 0.28, 0.0);
-            let tip_w = center + Vec2::new(-r * 0.28, 0.0);
-            painter.line_segment([tip_w, tip_n], stroke);
-            painter.line_segment([tip_n, tip_e], stroke);
-            painter.line_segment([tip_e, tip_s], stroke);
-            painter.line_segment([tip_s, tip_w], stroke);
+            painter.circle_stroke(center, r * 0.90, stroke);
+            painter.line_segment([center + Vec2::new(0.0, -r * 0.90), center + Vec2::new(0.0, -r * 0.72)], stroke);
+            painter.line_segment([center + Vec2::new(0.0, r * 0.72), center + Vec2::new(0.0, r * 0.90)], stroke);
+            painter.line_segment([center + Vec2::new(-r * 0.90, 0.0), center + Vec2::new(-r * 0.72, 0.0)], stroke);
+            painter.line_segment([center + Vec2::new(r * 0.72, 0.0), center + Vec2::new(r * 0.90, 0.0)], stroke);
+            let tip_n = center + Vec2::new(r * 0.55, -r * 0.55);
+            let tip_s = center + Vec2::new(-r * 0.55, r * 0.55);
+            let side1 = center + Vec2::new(-r * 0.16, -r * 0.16);
+            let side2 = center + Vec2::new(r * 0.16, r * 0.16);
+            painter.add(egui::epaint::PathShape::convex_polygon(
+                vec![side1, tip_n, side2],
+                color,
+                Stroke::NONE,
+            ));
+            painter.add(egui::epaint::PathShape::convex_polygon(
+                vec![side1, tip_s, side2],
+                Color32::TRANSPARENT,
+                stroke,
+            ));
+            painter.circle_filled(center, stroke_w * 0.8, color);
         }
         NativeIcon::Feed => {
-            painter.circle_filled(center + Vec2::new(0.0, r * 0.45), 2.2, color);
-            let arc_stroke = Stroke::new(stroke_w * 0.9, color);
-            painter.line_segment([center + Vec2::new(-r * 0.4, -r * 0.05), center + Vec2::new(r * 0.4, -r * 0.05)], arc_stroke);
-            painter.line_segment([center + Vec2::new(-r * 0.75, -r * 0.45), center + Vec2::new(r * 0.75, -r * 0.45)], arc_stroke);
+            let origin = center + Vec2::new(-r * 0.65, r * 0.65);
+            painter.circle_filled(origin, stroke_w * 1.3, color);
+            let n_arc = 8;
+            let mut arc1 = Vec::with_capacity(n_arc + 1);
+            let r1 = r * 0.65;
+            for i in 0..=n_arc {
+                let a = (i as f32 / n_arc as f32) * (std::f32::consts::FRAC_PI_2);
+                arc1.push(origin + Vec2::new(r1 * a.cos(), -r1 * a.sin()));
+            }
+            painter.add(egui::epaint::PathShape::line(arc1, stroke));
+            let mut arc2 = Vec::with_capacity(n_arc + 1);
+            let r2 = r * 1.15;
+            for i in 0..=n_arc {
+                let a = (i as f32 / n_arc as f32) * (std::f32::consts::FRAC_PI_2);
+                arc2.push(origin + Vec2::new(r2 * a.cos(), -r2 * a.sin()));
+            }
+            painter.add(egui::epaint::PathShape::line(arc2, stroke));
         }
         NativeIcon::Downloads => {
+            let tray_w = r * 0.82;
             let tray_y = center.y + r * 0.65;
-            let tray_w = r * 0.75;
+            let tray_h = r * 0.35;
+            painter.line_segment([Pos2::new(center.x - tray_w, tray_y - tray_h), Pos2::new(center.x - tray_w, tray_y)], stroke);
             painter.line_segment([Pos2::new(center.x - tray_w, tray_y), Pos2::new(center.x + tray_w, tray_y)], stroke);
-            let arrow_tip = center + Vec2::new(0.0, r * 0.35);
-            painter.line_segment([center + Vec2::new(0.0, -r * 0.65), arrow_tip], stroke);
-            painter.line_segment([Pos2::new(center.x - r * 0.35, arrow_tip.y - r * 0.35), arrow_tip], stroke);
-            painter.line_segment([Pos2::new(center.x + r * 0.35, arrow_tip.y - r * 0.35), arrow_tip], stroke);
+            painter.line_segment([Pos2::new(center.x + tray_w, tray_y), Pos2::new(center.x + tray_w, tray_y - tray_h)], stroke);
+            let arrow_tip = center + Vec2::new(0.0, r * 0.32);
+            painter.line_segment([center + Vec2::new(0.0, -r * 0.75), arrow_tip], stroke);
+            let wing_w = r * 0.40;
+            let wing_h = r * 0.40;
+            painter.line_segment([Pos2::new(center.x - wing_w, arrow_tip.y - wing_h), arrow_tip], stroke);
+            painter.line_segment([Pos2::new(center.x + wing_w, arrow_tip.y - wing_h), arrow_tip], stroke);
         }
         NativeIcon::Settings => {
-            painter.circle_stroke(center, r * 0.45, stroke);
-            for i in 0..6 {
-                let angle = (i as f32) * std::f32::consts::PI / 3.0;
-                let dir = Vec2::new(angle.cos(), angle.sin());
-                painter.line_segment([center + dir * (r * 0.45), center + dir * (r * 0.85)], stroke);
+            painter.circle_stroke(center, r * 0.35, stroke);
+            let n_teeth = 6;
+            for i in 0..n_teeth {
+                let angle = (i as f32) * std::f32::consts::TAU / (n_teeth as f32);
+                let half_span = std::f32::consts::PI / (n_teeth as f32 * 2.8);
+                let r_inner = r * 0.58;
+                let r_outer = r * 0.88;
+                let a1 = angle - half_span;
+                let a2 = angle + half_span;
+                let p1 = center + Vec2::new(r_inner * a1.cos(), r_inner * a1.sin());
+                let p2 = center + Vec2::new(r_outer * a1.cos(), r_outer * a1.sin());
+                let p3 = center + Vec2::new(r_outer * a2.cos(), r_outer * a2.sin());
+                let p4 = center + Vec2::new(r_inner * a2.cos(), r_inner * a2.sin());
+                painter.line_segment([p1, p2], stroke);
+                painter.line_segment([p2, p3], stroke);
+                painter.line_segment([p3, p4], stroke);
             }
+            painter.circle_stroke(center, r * 0.58, stroke);
         }
         NativeIcon::Fullscreen => {
-            let d = r * 0.75;
-            let arm = r * 0.38;
-            let tl = center + Vec2::new(-d, -d);
-            painter.line_segment([tl, tl + Vec2::new(arm, 0.0)], stroke);
-            painter.line_segment([tl, tl + Vec2::new(0.0, arm)], stroke);
-            let tr = center + Vec2::new(d, -d);
-            painter.line_segment([tr, tr + Vec2::new(-arm, 0.0)], stroke);
-            painter.line_segment([tr, tr + Vec2::new(0.0, arm)], stroke);
-            let bl = center + Vec2::new(-d, d);
-            painter.line_segment([bl, bl + Vec2::new(arm, 0.0)], stroke);
-            painter.line_segment([bl, bl + Vec2::new(0.0, -arm)], stroke);
-            let br = center + Vec2::new(d, d);
-            painter.line_segment([br, br + Vec2::new(-arm, 0.0)], stroke);
-            painter.line_segment([br, br + Vec2::new(0.0, -arm)], stroke);
+            let d = r * 0.78;
+            let arm = r * 0.36;
+            painter.line_segment([center + Vec2::new(-d, -d + arm), center + Vec2::new(-d, -d)], stroke);
+            painter.line_segment([center + Vec2::new(-d, -d), center + Vec2::new(-d + arm, -d)], stroke);
+            painter.line_segment([center + Vec2::new(d - arm, -d), center + Vec2::new(d, -d)], stroke);
+            painter.line_segment([center + Vec2::new(d, -d), center + Vec2::new(d, -d + arm)], stroke);
+            painter.line_segment([center + Vec2::new(-d, d - arm), center + Vec2::new(-d, d)], stroke);
+            painter.line_segment([center + Vec2::new(-d, d), center + Vec2::new(-d + arm, d)], stroke);
+            painter.line_segment([center + Vec2::new(d - arm, d), center + Vec2::new(d, d)], stroke);
+            painter.line_segment([center + Vec2::new(d, d), center + Vec2::new(d, d - arm)], stroke);
         }
         NativeIcon::Amoled => {
-            painter.circle_stroke(center, r * 0.72, stroke);
-            painter.circle_filled(center + Vec2::new(r * 0.35, -r * 0.15), r * 0.58, Color32::from_rgb(18, 18, 22));
+            let n = 16;
+            let mut moon = Vec::with_capacity(n * 2 + 1);
+            let r_outer = r * 0.85;
+            for i in 0..=n {
+                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * std::f32::consts::PI;
+                moon.push(center + Vec2::new(r_outer * a.cos(), r_outer * a.sin()));
+            }
+            let inner_c = center + Vec2::new(r * 0.32, 0.0);
+            let r_inner = r * 0.72;
+            for i in (0..=n).rev() {
+                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 / n as f32) * std::f32::consts::PI;
+                moon.push(inner_c + Vec2::new(r_inner * a.cos(), r_inner * a.sin()));
+            }
+            painter.add(egui::epaint::PathShape::convex_polygon(
+                moon,
+                color,
+                Stroke::NONE,
+            ));
         }
         NativeIcon::Back => {
-            let tip = center + Vec2::new(-r * 0.35, 0.0);
-            painter.line_segment([center + Vec2::new(r * 0.35, -r * 0.55), tip], stroke);
-            painter.line_segment([center + Vec2::new(r * 0.35, r * 0.55), tip], stroke);
+            let arm_x = r * 0.32;
+            let arm_y = r * 0.58;
+            let tip = center + Vec2::new(-arm_x, 0.0);
+            painter.line_segment([center + Vec2::new(arm_x, -arm_y), tip], stroke);
+            painter.line_segment([tip, center + Vec2::new(arm_x, arm_y)], stroke);
         }
         NativeIcon::Close => {
-            let d = r * 0.52;
+            let d = r * 0.55;
             painter.line_segment([center + Vec2::new(-d, -d), center + Vec2::new(d, d)], stroke);
             painter.line_segment([center + Vec2::new(d, -d), center + Vec2::new(-d, d)], stroke);
         }
         NativeIcon::Search => {
-            let r_lens = r * 0.48;
-            let c_lens = center + Vec2::new(-r * 0.2, -r * 0.2);
+            let r_lens = r * 0.50;
+            let c_lens = center + Vec2::new(-r * 0.22, -r * 0.22);
             painter.circle_stroke(c_lens, r_lens, stroke);
             let handle_start = c_lens + Vec2::new(r_lens * 0.707, r_lens * 0.707);
-            let handle_end = center + Vec2::new(r * 0.75, r * 0.75);
+            let handle_end = center + Vec2::new(r * 0.80, r * 0.80);
             painter.line_segment([handle_start, handle_end], stroke);
         }
         NativeIcon::ZoomIn => {
-            let d = r * 0.55;
-            painter.line_segment([center + Vec2::new(-d, 0.0), center + Vec2::new(d, 0.0)], stroke);
-            painter.line_segment([center + Vec2::new(0.0, -d), center + Vec2::new(0.0, d)], stroke);
+            let r_lens = r * 0.50;
+            let c_lens = center + Vec2::new(-r * 0.22, -r * 0.22);
+            painter.circle_stroke(c_lens, r_lens, stroke);
+            let handle_start = c_lens + Vec2::new(r_lens * 0.707, r_lens * 0.707);
+            let handle_end = center + Vec2::new(r * 0.80, r * 0.80);
+            painter.line_segment([handle_start, handle_end], stroke);
+            let arm = r_lens * 0.52;
+            painter.line_segment([c_lens + Vec2::new(-arm, 0.0), c_lens + Vec2::new(arm, 0.0)], stroke);
+            painter.line_segment([c_lens + Vec2::new(0.0, -arm), c_lens + Vec2::new(0.0, arm)], stroke);
         }
         NativeIcon::ZoomOut => {
-            let d = r * 0.55;
-            painter.line_segment([center + Vec2::new(-d, 0.0), center + Vec2::new(d, 0.0)], stroke);
+            let r_lens = r * 0.50;
+            let c_lens = center + Vec2::new(-r * 0.22, -r * 0.22);
+            painter.circle_stroke(c_lens, r_lens, stroke);
+            let handle_start = c_lens + Vec2::new(r_lens * 0.707, r_lens * 0.707);
+            let handle_end = center + Vec2::new(r * 0.80, r * 0.80);
+            painter.line_segment([handle_start, handle_end], stroke);
+            let arm = r_lens * 0.52;
+            painter.line_segment([c_lens + Vec2::new(-arm, 0.0), c_lens + Vec2::new(arm, 0.0)], stroke);
         }
         NativeIcon::Refresh => {
-            painter.circle_stroke(center, r * 0.65, stroke);
-            let tip = center + Vec2::new(r * 0.65, 0.0);
-            painter.line_segment([tip + Vec2::new(-r * 0.3, -r * 0.3), tip], stroke);
-            painter.line_segment([tip + Vec2::new(r * 0.3, -r * 0.3), tip], stroke);
+            let arc_r = r * 0.68;
+            let n_pts = 16;
+            let mut arc = Vec::with_capacity(n_pts + 1);
+            let start_angle = -std::f32::consts::FRAC_PI_2;
+            let end_angle = std::f32::consts::PI;
+            for i in 0..=n_pts {
+                let a = start_angle + (i as f32 / n_pts as f32) * (end_angle - start_angle);
+                arc.push(center + Vec2::new(arc_r * a.cos(), arc_r * a.sin()));
+            }
+            painter.add(egui::epaint::PathShape::line(arc, stroke));
+            let tip = center + Vec2::new(0.0, -arc_r);
+            painter.line_segment([tip + Vec2::new(-r * 0.25, -r * 0.25), tip], stroke);
+            painter.line_segment([tip + Vec2::new(-r * 0.25, r * 0.25), tip], stroke);
         }
     }
 }
@@ -162,29 +242,31 @@ pub fn z_icon_button(
 ) -> bool {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let hovered = resp.hovered();
+    let hover_t = ui.ctx().animate_bool_responsive(resp.id, hovered || selected);
 
     let bg = if selected {
         tokens.primary_container
-    } else if hovered {
-        tokens.surface_container_high
     } else {
-        Color32::TRANSPARENT
+        Color32::from_rgba_unmultiplied(
+            tokens.surface_container_high.r(),
+            tokens.surface_container_high.g(),
+            tokens.surface_container_high.b(),
+            (tokens.surface_container_high.a() as f32 * hover_t) as u8,
+        )
     };
 
     let border = if selected {
         Stroke::new(1.5_f32, tokens.primary)
-    } else if hovered {
-        Stroke::new(1.0_f32, tokens.border_glass)
+    } else if hover_t > 0.05 {
+        Stroke::new(1.0_f32, tokens.border_glass.gamma_multiply(hover_t))
     } else {
         Stroke::NONE
     };
 
     let fg = if selected {
         tokens.primary
-    } else if hovered {
-        tokens.text_primary
     } else {
-        tokens.text_muted
+        tokens.text_muted.lerp_to_gamma(tokens.text_primary, hover_t)
     };
 
     let painter = ui.painter_at(rect);
@@ -196,6 +278,10 @@ pub fn z_icon_button(
     }
 
     paint_native_icon(&painter, rect, icon, fg, 1.6_f32);
+
+    if hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
 
     if !tooltip.is_empty() {
         resp.on_hover_text(tooltip).clicked()
@@ -452,7 +538,7 @@ pub fn manga_cover_card(
     tokens: &GlassTokens,
     manga: &Manga,
     progress_percent: Option<u32>,
-    show_source_badge: bool,
+    _show_source_badge: bool,
 ) -> CardAction {
     let mut action = CardAction::None;
     let card_w = 148.0;
@@ -461,6 +547,7 @@ pub fn manga_cover_card(
 
     let (outer_rect, resp) = ui.allocate_exact_size(Vec2::new(card_w, total_h), Sense::click());
     let hovered = resp.hovered();
+    let hover_t = ctx.animate_bool_responsive(resp.id.with("card_hover"), hovered);
 
     if resp.clicked() {
         action = CardAction::Open;
@@ -489,17 +576,24 @@ pub fn manga_cover_card(
 
     let cover_rect = Rect::from_min_size(outer_rect.min, Vec2::new(card_w, cover_h));
 
-    // Draw elevation glow/shadow behind cover_rect
+    // Dynamic fluid elevation shadow behind cover
+    let shadow_y = egui::lerp(2.0..=5.0, hover_t);
+    let shadow_expand = egui::lerp(0.5..=2.5, hover_t);
     let shadow_rect = cover_rect
-        .translate(Vec2::new(0.0, if hovered { 4.0 } else { 2.0 }))
-        .expand(if hovered { 2.0 } else { 0.5 });
-    ui.painter().rect_filled(
-        shadow_rect,
-        Rounding::same(13.0),
-        tokens.card_shadow_color(hovered),
-    );
+        .translate(Vec2::new(0.0, shadow_y))
+        .expand(shadow_expand);
 
-    // Render cover image inside cover_rect
+    let base_shadow = tokens.card_shadow_color(false);
+    let hover_shadow = tokens.card_shadow_color(true);
+    let shadow_color = Color32::from_rgba_premultiplied(
+        egui::lerp(base_shadow.r() as f32..=hover_shadow.r() as f32, hover_t) as u8,
+        egui::lerp(base_shadow.g() as f32..=hover_shadow.g() as f32, hover_t) as u8,
+        egui::lerp(base_shadow.b() as f32..=hover_shadow.b() as f32, hover_t) as u8,
+        egui::lerp(base_shadow.a() as f32..=hover_shadow.a() as f32, hover_t) as u8,
+    );
+    ui.painter().rect_filled(shadow_rect, Rounding::same(13.0), shadow_color);
+
+    // Render cover image inside cover_rect (pristine artwork, no badges or text clutter)
     let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(cover_rect));
     if draw_remote_image(
         &mut child_ui,
@@ -520,65 +614,6 @@ pub fn manga_cover_card(
 
     let painter = ui.painter();
 
-    // Subtle bottom gradient scrim on cover
-    let scrim_rect = Rect::from_min_max(
-        Pos2::new(cover_rect.min.x, cover_rect.max.y - 38.0),
-        cover_rect.max,
-    );
-    painter.rect_filled(
-        scrim_rect,
-        Rounding {
-            nw: 0.0,
-            ne: 0.0,
-            sw: 12.0,
-            se: 12.0,
-        },
-        Color32::from_rgba_unmultiplied(6, 8, 12, 165),
-    );
-
-    // Top-left Source Badge
-    if show_source_badge {
-        let src_label: String = manga.source_id.chars().take(10).collect();
-        let pill_w = (src_label.len() as f32 * 6.2 + 12.0).clamp(38.0, 86.0);
-        let pill_rect = Rect::from_min_size(
-            Pos2::new(cover_rect.min.x + 6.0, cover_rect.min.y + 6.0),
-            Vec2::new(pill_w, 18.0),
-        );
-        painter.rect_filled(
-            pill_rect,
-            Rounding::same(6.0),
-            Color32::from_rgba_unmultiplied(10, 12, 18, 210),
-        );
-        painter.rect_stroke(pill_rect, Rounding::same(6.0), Stroke::new(1.0_f32, tokens.border_glass));
-        painter.text(
-            pill_rect.center(),
-            Align2::CENTER_CENTER,
-            src_label,
-            FontId::proportional(9.5),
-            tokens.primary,
-        );
-    }
-
-    // Top-right Manhwa badge if Manhwa
-    if manga.is_manhwa {
-        let badge_rect = Rect::from_min_size(
-            Pos2::new(cover_rect.max.x - 52.0, cover_rect.min.y + 6.0),
-            Vec2::new(46.0, 18.0),
-        );
-        painter.rect_filled(
-            badge_rect,
-            Rounding::same(6.0),
-            Color32::from_rgba_unmultiplied(18, 24, 34, 215),
-        );
-        painter.text(
-            badge_rect.center(),
-            Align2::CENTER_CENTER,
-            "WEBTOON",
-            FontId::proportional(8.5),
-            Color32::from_rgb(111, 221, 226),
-        );
-    }
-
     // Sleek minimal progress bar along the bottom of the cover (no numbers or bulky circles)
     if let Some(pct) = progress_percent.filter(|&p| p > 0) {
         let bar_w = (card_w * (pct as f32 / 100.0).clamp(0.0, 1.0)).max(6.0);
@@ -598,20 +633,23 @@ pub fn manga_cover_card(
         );
     }
 
-    // Cover Border (glows in primary color on hover)
-    let border_stroke = if hovered {
-        Stroke::new(2.0_f32, tokens.primary)
-    } else {
-        Stroke::new(1.0_f32, tokens.border_glass)
-    };
-    painter.rect_stroke(cover_rect, Rounding::same(12.0), border_stroke);
+    // Cover Border: smooth animated transition between glass border and glowing primary
+    let border_width = egui::lerp(1.0..=2.0, hover_t);
+    let border_color = Color32::from_rgba_premultiplied(
+        egui::lerp(tokens.border_glass.r() as f32..=tokens.primary.r() as f32, hover_t) as u8,
+        egui::lerp(tokens.border_glass.g() as f32..=tokens.primary.g() as f32, hover_t) as u8,
+        egui::lerp(tokens.border_glass.b() as f32..=tokens.primary.b() as f32, hover_t) as u8,
+        egui::lerp(tokens.border_glass.a() as f32..=tokens.primary.a() as f32, hover_t) as u8,
+    );
+    painter.rect_stroke(cover_rect, Rounding::same(12.0), Stroke::new(border_width, border_color));
 
-    // 2-line Title below cover
-    let title_color = if hovered {
-        tokens.primary
-    } else {
-        tokens.text_primary
-    };
+    // 2-line Title below cover with animated primary color accent on hover
+    let title_color = Color32::from_rgba_premultiplied(
+        egui::lerp(tokens.text_primary.r() as f32..=tokens.primary.r() as f32, hover_t) as u8,
+        egui::lerp(tokens.text_primary.g() as f32..=tokens.primary.g() as f32, hover_t) as u8,
+        egui::lerp(tokens.text_primary.b() as f32..=tokens.primary.b() as f32, hover_t) as u8,
+        egui::lerp(tokens.text_primary.a() as f32..=tokens.primary.a() as f32, hover_t) as u8,
+    );
     let clean_title = truncate_str(&manga.title, 34);
     let title_pos = Pos2::new(outer_rect.min.x + 2.0, cover_rect.max.y + 6.0);
     let galley = painter.layout(

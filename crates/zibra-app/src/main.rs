@@ -289,6 +289,18 @@ impl ZibraApp {
         let settings = settings_store.load();
         let library = LibraryStore::new(&app_dir).expect("Failed to open SQLite library");
         let registry = Arc::new(LiveSourceRegistry::new());
+        let reg_for_jvm = registry.clone();
+        rt.spawn(async move {
+            match reg_for_jvm.bind_jvm_host().await {
+                Ok(count) if count > 0 => {
+                    eprintln!("[ZIBRA] Successfully bound {} Kotatsu sources via JVM host bridge", count);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("[ZIBRA] JVM host Kotatsu source bridge note: {}", e);
+                }
+            }
+        });
         let downloader = DesktopDownloader::new(&app_dir, settings.max_concurrent_downloads);
         let reader_pipeline = ReaderPagePipeline::new(&app_dir, settings.ram_cache_budget_mb);
         let cover_cache = CoverImageCache::new(&app_dir);
@@ -946,24 +958,42 @@ impl ZibraApp {
 
         let (rect, resp) = ui.allocate_exact_size(btn_size, Sense::click());
         let hovered = resp.hovered();
+        let hover_t = ui.ctx().animate_bool_responsive(resp.id.with("rail_hover"), hovered);
+        let sel_t = ui.ctx().animate_bool_responsive(resp.id.with("rail_sel"), selected);
 
-        let fg = if selected {
-            tokens.primary
-        } else if hovered {
-            tokens.text_primary
+        if hovered {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        let fg = if sel_t > 0.01 {
+            Color32::from_rgba_premultiplied(
+                egui::lerp(tokens.text_muted.r() as f32..=tokens.primary.r() as f32, sel_t) as u8,
+                egui::lerp(tokens.text_muted.g() as f32..=tokens.primary.g() as f32, sel_t) as u8,
+                egui::lerp(tokens.text_muted.b() as f32..=tokens.primary.b() as f32, sel_t) as u8,
+                255,
+            )
         } else {
-            tokens.text_muted
+            Color32::from_rgba_premultiplied(
+                egui::lerp(tokens.text_muted.r() as f32..=tokens.text_primary.r() as f32, hover_t) as u8,
+                egui::lerp(tokens.text_muted.g() as f32..=tokens.text_primary.g() as f32, hover_t) as u8,
+                egui::lerp(tokens.text_muted.b() as f32..=tokens.text_primary.b() as f32, hover_t) as u8,
+                255,
+            )
         };
-        let fill = if selected {
-            tokens.primary_container
-        } else if hovered {
-            tokens.surface_container_high
+
+        let fill = if sel_t > 0.01 {
+            let [r, g, b, _] = tokens.primary_container.to_array();
+            Color32::from_rgba_unmultiplied(r, g, b, (sel_t * 220.0) as u8)
+        } else if hover_t > 0.01 {
+            let [r, g, b, _] = tokens.surface_container_high.to_array();
+            Color32::from_rgba_unmultiplied(r, g, b, (hover_t * 180.0) as u8)
         } else {
             Color32::TRANSPARENT
         };
-        let stroke = if selected {
+
+        let stroke = if sel_t > 0.01 {
             Stroke::new(1.5_f32, tokens.border_glow)
-        } else if hovered {
+        } else if hover_t > 0.01 {
             Stroke::new(1.0_f32, tokens.border_glass)
         } else {
             Stroke::NONE

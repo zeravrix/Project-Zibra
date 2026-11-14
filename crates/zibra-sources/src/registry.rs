@@ -14,6 +14,7 @@ use crate::engines::{
     zeist::ZeistEngine,
 };
 use crate::{MangaPageResult, Source};
+use crate::jvm_host::{JvmHostClient, JvmHostSource};
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -23,9 +24,10 @@ use std::time::{Duration, Instant};
 use zibra_core::{CatalogSortMode, LibraryStore, Manga, SourceTag};
 
 pub struct LiveSourceRegistry {
-    sources: Vec<Arc<dyn Source>>,
-    source_map: HashMap<String, Arc<dyn Source>>,
+    sources: Arc<RwLock<Vec<Arc<dyn Source>>>>,
+    source_map: Arc<RwLock<HashMap<String, Arc<dyn Source>>>>,
     latency_ms: Arc<RwLock<HashMap<String, u64>>>,
+    jvm_client: Arc<RwLock<Option<Arc<JvmHostClient>>>>,
 }
 
 impl Default for LiveSourceRegistry {
@@ -142,11 +144,70 @@ impl LiveSourceRegistry {
             source_map.insert(s.id().to_uppercase(), s.clone());
         }
 
-        Self {
-            sources,
-            source_map,
+        let reg = Self {
+            sources: Arc::new(RwLock::new(sources)),
+            source_map: Arc::new(RwLock::new(source_map)),
             latency_ms: Arc::new(RwLock::new(HashMap::new())),
+            jvm_client: Arc::new(RwLock::new(None)),
+        };
+
+        reg.spawn_jvm_binding_if_available();
+        reg
+    }
+
+    fn spawn_jvm_binding_if_available(&self) {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            let sources_lock = self.sources.clone();
+            let map_lock = self.source_map.clone();
+            let jvm_lock = self.jvm_client.clone();
+
+            tokio::spawn(async move {
+                match JvmHostClient::try_start().await {
+                    Ok(Some(client)) => {
+                        *jvm_lock.write() = Some(client.clone());
+                        if let Ok(list) = client.list_sources().await {
+                            println!("[JVM-HOST] Bound {} Kotatsu parser sources into ZIBRA LiveSourceRegistry!", list.len());
+                            let mut s_w = sources_lock.write();
+                            let mut m_w = map_lock.write();
+                            for info in list {
+                                let jvm_source = Arc::new(JvmHostSource::new(client.clone(), &info));
+                                m_w.insert(jvm_source.id().to_string(), jvm_source.clone());
+                                m_w.insert(jvm_source.id().to_uppercase(), jvm_source.clone());
+                                m_w.insert(info.id.to_string(), jvm_source.clone());
+                                let name_key = info.name.to_uppercase().replace(' ', "");
+                                m_w.entry(name_key).or_insert_with(|| jvm_source.clone());
+                                s_w.push(jvm_source);
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => eprintln!("[JVM-HOST] Initialization warning: {}", e),
+                }
+            });
         }
+    }
+
+    pub async fn bind_jvm_host(&self) -> anyhow::Result<usize> {
+        let Some(client) = JvmHostClient::try_start().await? else {
+            return Ok(0);
+        };
+        *self.jvm_client.write() = Some(client.clone());
+        let list = client.list_sources().await?;
+        let count = list.len();
+        {
+            let mut s_w = self.sources.write();
+            let mut m_w = self.source_map.write();
+            for info in list {
+                let jvm_source = Arc::new(JvmHostSource::new(client.clone(), &info));
+                m_w.insert(jvm_source.id().to_string(), jvm_source.clone());
+                m_w.insert(jvm_source.id().to_uppercase(), jvm_source.clone());
+                m_w.insert(info.id.to_string(), jvm_source.clone());
+                let name_key = info.name.to_uppercase().replace(' ', "");
+                m_w.entry(name_key).or_insert_with(|| jvm_source.clone());
+                s_w.push(jvm_source);
+            }
+        }
+        Ok(count)
     }
 
     fn load_user_repository_sources(sources: &mut Vec<Arc<dyn Source>>, client: &reqwest::Client) {
@@ -206,29 +267,30 @@ impl LiveSourceRegistry {
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn Source>> {
-        if let Some(found) = self.source_map.get(id) {
+        let map = self.source_map.read();
+        if let Some(found) = map.get(id) {
             return Some(found.clone());
         }
         let mapped = LibraryStore::map_legacy_source_id(id);
-        self.source_map
-            .get(&mapped)
-            .or_else(|| self.source_map.get(&mapped.to_uppercase()))
+        map.get(&mapped)
+            .or_else(|| map.get(&mapped.to_uppercase()))
             .cloned()
     }
 
-    pub fn all_sources(&self) -> &[Arc<dyn Source>] {
-        &self.sources
+    pub fn all_sources(&self) -> Vec<Arc<dyn Source>> {
+        self.sources.read().clone()
     }
 
     pub fn total_count(&self) -> usize {
-        self.sources.len()
+        self.sources.read().len()
     }
 
     pub fn visible_count(&self, nsfw_enabled: bool) -> usize {
+        let s = self.sources.read();
         if nsfw_enabled {
-            self.sources.len()
+            s.len()
         } else {
-            self.sources.iter().filter(|s| !s.is_nsfw()).count()
+            s.iter().filter(|s| !s.is_nsfw()).count()
         }
     }
 
@@ -250,9 +312,9 @@ impl LiveSourceRegistry {
         nsfw_enabled: bool,
     ) -> Vec<Arc<dyn Source>> {
         let q = search_query.trim().to_lowercase();
-        let mut filtered: Vec<Arc<dyn Source>> = self
-            .sources
-            .iter()
+        let sources_snap = self.sources.read().clone();
+        let mut filtered: Vec<Arc<dyn Source>> = sources_snap
+            .into_iter()
             .filter(|s| {
                 if !nsfw_enabled && s.is_nsfw() {
                     return false;
@@ -275,7 +337,6 @@ impl LiveSourceRegistry {
                     });
                 match_lang && match_query && match_tags
             })
-            .cloned()
             .collect();
 
         let latencies = self.latency_ms.read().clone();
@@ -345,12 +406,11 @@ impl LiveSourceRegistry {
         if q.is_empty() {
             return Vec::new();
         }
-        let targets: Vec<Arc<dyn Source>> = self
-            .sources
-            .iter()
+        let sources_snap = self.sources.read().clone();
+        let targets: Vec<Arc<dyn Source>> = sources_snap
+            .into_iter()
             .filter(|s| (nsfw_enabled || !s.is_nsfw()) && (pinned_ids.contains(s.id()) || s.priority_rank() <= 12))
             .take(16)
-            .cloned()
             .collect();
 
         let mut handles = Vec::new();
@@ -381,3 +441,4 @@ impl LiveSourceRegistry {
         combined
     }
 }
+

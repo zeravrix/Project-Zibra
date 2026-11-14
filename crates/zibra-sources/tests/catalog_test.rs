@@ -40,3 +40,18 @@ async fn test_asura_catalog_fetch() {
         assert!(!page.items.is_empty(), "Asura Scans must return items when online");
     }
 }
+
+#[tokio::test]
+async fn test_jvm_host_kotatsu_sources_binding() {
+    let registry = LiveSourceRegistry::new();
+    let bound_count = registry.bind_jvm_host().await.unwrap_or(0);
+    println!("Bound Kotatsu sources from JVM host: {}", bound_count);
+    assert!(bound_count >= 500, "JVM host must bind at least 500 Kotatsu sources, got {}", bound_count);
+
+    // Verify lookup by Kotatsu ID
+    let swat = registry.get("5566816682352269121").expect("MangaSwat Kotatsu source must exist in registry");
+    let popular = swat.popular(1).await.expect("Kotatsu MangaSwat popular fetch must succeed");
+    assert!(!popular.items.is_empty(), "MangaSwat must return titles through Kotatsu JVM host bridge");
+    println!("Kotatsu MangaSwat returned {} titles! Sample: {}", popular.items.len(), popular.items[0].title);
+}
+
