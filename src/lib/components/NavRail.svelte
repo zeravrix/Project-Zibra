@@ -1,6 +1,6 @@
 <script>
   import { 
-    History, Heart, Compass, Rss, Download, Settings,
+    History, Heart, Compass, Globe, Rss, Download, Settings,
     PanelLeftClose, PanelLeftOpen 
   } from 'lucide-svelte';
   import { appState, navigate } from '../stores/app.svelte.js';
@@ -9,6 +9,7 @@
     { id: 'history', label: 'History', icon: History },
     { id: 'favorites', label: 'Favourites', icon: Heart },
     { id: 'explore', label: 'Explore', icon: Compass },
+    { id: 'sources', label: 'Sources', icon: Globe },
     { id: 'feed', label: 'Feed', icon: Rss },
     { id: 'downloads', label: 'Downloads', icon: Download },
   ];
@@ -16,21 +17,25 @@
 
 <nav class="nav-rail" class:expanded={appState.railExpanded}>
   <div class="rail-top">
-    <div class="logo-area">
+    <div class="logo-area" on:click={() => navigate('explore')}>
+      <img src="/logo.png" alt="ZX Logo" class="brand-logo-img" />
+      {#if appState.railExpanded}
+        <div class="brand-text">
+          <span class="logo-title">ZIBRA<span class="logo-x">X</span></span>
+          <span class="logo-sub">READER</span>
+        </div>
+      {/if}
       <button 
         class="toggle-btn" 
-        on:click={() => appState.railExpanded = !appState.railExpanded}
+        on:click|stopPropagation={() => appState.railExpanded = !appState.railExpanded}
         title={appState.railExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
       >
         {#if appState.railExpanded}
-          <PanelLeftClose size={20} strokeWidth={1.8} />
+          <PanelLeftClose size={18} strokeWidth={1.8} />
         {:else}
-          <PanelLeftOpen size={20} strokeWidth={1.8} />
+          <PanelLeftOpen size={18} strokeWidth={1.8} />
         {/if}
       </button>
-      {#if appState.railExpanded}
-        <span class="logo-title">ZIBRAX</span>
-      {/if}
     </div>
 
     <div class="items-list">
@@ -102,23 +107,59 @@
     height: 40px;
   }
 
+  .brand-logo-img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5));
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .brand-logo-img:hover {
+    transform: scale(1.1);
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    white-space: nowrap;
+    cursor: pointer;
+    flex: 1;
+  }
+
+  .logo-title {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: var(--z-text);
+    line-height: 1.1;
+  }
+
+  .logo-x {
+    color: #3b82f6;
+  }
+
+  .logo-sub {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    color: var(--z-text-muted);
+  }
+
   .toggle-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--z-radius-md);
     color: var(--z-text-muted);
     transition: all var(--z-duration-fast) var(--z-ease-out);
+    margin-left: auto;
   }
 
   .toggle-btn:hover {
     background: var(--z-surface-raised);
-    color: var(--z-text);
-  }
-
-  .logo-title {
-    font-size: var(--z-text-base);
-    font-weight: 700;
-    letter-spacing: 1.5px;
     color: var(--z-text);
   }
 

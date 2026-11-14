@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import NavRail from './lib/components/NavRail.svelte';
+  import FloatingContinue from './lib/components/FloatingContinue.svelte';
   import Library from './lib/views/Library.svelte';
   import Explore from './lib/views/Explore.svelte';
   import Details from './lib/views/Details.svelte';
@@ -24,7 +25,9 @@
     {:else if appState.currentScreen === 'favorites'}
       <Library mode="favorites" />
     {:else if appState.currentScreen === 'explore'}
-      <Explore />
+      <Explore initialMode="pinned" />
+    {:else if appState.currentScreen === 'sources'}
+      <Explore initialMode="catalog" />
     {:else if appState.currentScreen === 'feed'}
       <Library mode="history" />
     {:else if appState.currentScreen === 'downloads'}
@@ -37,6 +40,10 @@
       <Reader />
     {/if}
   </main>
+
+  {#if appState.currentScreen !== 'reader' && appState.currentScreen !== 'details'}
+    <FloatingContinue />
+  {/if}
 
   {#if appState.notification}
     <div class="toast-notification">

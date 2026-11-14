@@ -122,13 +122,10 @@
     openReader(manga, target);
   }
 
-  $: displayedChapters = [...chapters]
-    .sort((a, b) => {
-      const numA = a.number ?? 0;
-      const numB = b.number ?? 0;
-      return sortAscending ? numA - numB : numB - numA;
-    })
-    .filter(c => !chapterFilter || c.title.toLowerCase().includes(chapterFilter.toLowerCase()));
+  $: displayedChapters = (() => {
+    let list = [...chapters].filter(c => !chapterFilter || c.title.toLowerCase().includes(chapterFilter.toLowerCase()));
+    return sortAscending ? list.reverse() : list;
+  })();
 
   onMount(async () => {
     loadDetails();
@@ -212,10 +209,6 @@
             </button>
             <button class="icon-action-btn" class:fav={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? "In Library" : "Add to Library"}>
               <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
-            </button>
-            <button class="cf-action-btn" title="Open light browser to pass Cloudflare challenge" on:click={handleSolveCloudflare}>
-              <ShieldAlert size={16} />
-              <span>Pass Cloudflare</span>
             </button>
           </div>
         </div>

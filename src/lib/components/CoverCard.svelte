@@ -61,17 +61,25 @@
       {/if}
 
       {#if progress > 0}
-        <div class="progress-bar-bg">
-          <div class="progress-fill" style:width="{Math.min(100, Math.round(progress * 100))}%"></div>
+        <div class="progress-circle" title="{Math.round(progress * 100)}% completed">
+          <svg class="progress-svg" viewBox="0 0 36 36">
+            <path
+              class="circle-bg"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            />
+            <path
+              class="circle-fill"
+              stroke-dasharray="{Math.min(100, Math.round(progress * 100))}, 100"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            />
+          </svg>
+          <span class="circle-val">{Math.round(progress * 100)}%</span>
         </div>
       {/if}
     </div>
 
     <div class="meta">
       <p class="title">{title}</p>
-      {#if manga.source_id}
-        <span class="source-tag">{manga.source_id.replace(/^[^:]+:/, '')}</span>
-      {/if}
     </div>
   </div>
 </div>
@@ -172,21 +180,52 @@
     background: rgba(0, 0, 0, 0.85);
   }
 
-  .progress-bar-bg {
+  .progress-circle {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 3.5px;
-    background: rgba(0, 0, 0, 0.5);
-    overflow: hidden;
+    bottom: 8px;
+    right: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(10, 10, 16, 0.88);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    z-index: 5;
   }
 
-  .progress-fill {
+  .progress-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
     height: 100%;
-    background: var(--z-accent);
-    border-radius: 0 2px 2px 0;
-    transition: width var(--z-duration-normal) var(--z-ease-out);
+    transform: rotate(-90deg);
+  }
+
+  .circle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 3.4;
+  }
+
+  .circle-fill {
+    fill: none;
+    stroke: #3b82f6;
+    stroke-width: 3.4;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.3s ease;
+  }
+
+  .circle-val {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #ffffff;
+    z-index: 2;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
   .meta {
@@ -210,13 +249,5 @@
 
   .card:hover .title {
     color: var(--z-accent);
-  }
-
-  .source-tag {
-    font-size: var(--z-text-xs);
-    color: var(--z-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 600;
   }
 </style>
