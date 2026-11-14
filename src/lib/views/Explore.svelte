@@ -169,18 +169,38 @@
     }
   ] : [];
 
+  let cachedAllSources = null;
+
+  function filterSourcesByLang() {
+    if (!cachedAllSources) return;
+    if (!selectedLang || selectedLang === 'ALL') {
+      allSources = cachedAllSources;
+    } else {
+      allSources = cachedAllSources.filter(s => s.language.toLowerCase() === selectedLang.toLowerCase());
+    }
+  }
+
+  $: if (selectedLang && cachedAllSources) {
+    filterSourcesByLang();
+  }
+
   $: if (sourceCatalogSearch || selectedLang) {
     catalogDisplayLimit = 60;
   }
 
-  async function loadSources() {
+  async function loadSources(force = false) {
+    if (cachedAllSources && !force) {
+      filterSourcesByLang();
+      return;
+    }
     loadingSources = true;
     try {
-      allSources = await invoke('get_sources', {
-        langFilter: selectedLang,
+      cachedAllSources = await invoke('get_sources', {
+        langFilter: 'ALL',
         query: '',
         nsfwEnabled: appState.settings?.nsfw_enabled ?? false,
       });
+      filterSourcesByLang();
     } catch (e) {
       console.error('Failed to load sources:', e);
       notify('Failed to load sources: ' + e);

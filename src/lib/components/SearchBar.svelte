@@ -66,6 +66,8 @@
 
   input {
     flex: 1;
+    min-width: 0;
+    outline: none;
     background: transparent;
     border: none;
     color: var(--z-text);

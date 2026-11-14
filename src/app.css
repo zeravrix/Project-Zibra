@@ -45,19 +45,19 @@
 
 /* === SEMANTIC THEMES === */
 
-/* Dark (Default) */
+/* Dark (Default - #23212c / rgb(35,33,44)) */
 :root, [data-theme="dark"] {
-  --z-bg: #0f131a;
-  --z-surface: #141923;
-  --z-surface-raised: #1c2331;
-  --z-surface-overlay: rgba(15, 19, 26, 0.85);
-  --z-text: #f3f5f9;
-  --z-text-muted: #8b95a5;
+  --z-bg: #23212c;
+  --z-surface: #2b2837;
+  --z-surface-raised: #343042;
+  --z-surface-overlay: rgba(35, 33, 44, 0.90);
+  --z-text: #f4f3f7;
+  --z-text-muted: #9f9dae;
   --z-border: rgba(255, 255, 255, 0.08);
-  --z-border-hover: rgba(255, 255, 255, 0.18);
+  --z-border-hover: rgba(255, 255, 255, 0.16);
   --z-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.45);
   --z-shadow-card-hover: 0 10px 28px var(--z-accent-glow);
-  --z-reader-bg: #0c0e14;
+  --z-reader-bg: #1c1a24;
 }
 
 /* AMOLED Deep Pitch Black */

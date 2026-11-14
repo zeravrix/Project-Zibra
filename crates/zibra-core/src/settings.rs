@@ -207,7 +207,7 @@ impl ColorTheme {
 
     pub fn dark_bg_rgb(&self) -> (u8, u8, u8) {
         match self {
-            ColorTheme::Totoro => (0x0E, 0x11, 0x16),
+            ColorTheme::Totoro => (0x23, 0x21, 0x2C),
             ColorTheme::Monet => (0x0D, 0x12, 0x19),
             ColorTheme::Expressive => (0x14, 0x0F, 0x19),
             ColorTheme::Miku => (0x0B, 0x12, 0x13),
@@ -225,7 +225,7 @@ impl ColorTheme {
 
     pub fn dark_surface_container_rgb(&self) -> (u8, u8, u8) {
         match self {
-            ColorTheme::Totoro => (0x17, 0x1A, 0x21),
+            ColorTheme::Totoro => (0x2B, 0x28, 0x37),
             ColorTheme::Monet => (0x16, 0x1C, 0x24),
             ColorTheme::Expressive => (0x1E, 0x17, 0x24),
             ColorTheme::Miku => (0x14, 0x1C, 0x1D),

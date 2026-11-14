@@ -199,6 +199,31 @@
     display: flex;
     align-items: center;
     gap: var(--z-space-3);
+    flex-shrink: 0;
+  }
+
+  .header-right {
+    flex: 1;
+    max-width: 360px;
+    min-width: 180px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 680px) {
+    .library-view {
+      padding: var(--z-space-4);
+    }
+    .header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--z-space-3);
+    }
+    .header-right {
+      max-width: 100%;
+      min-width: 0;
+      width: 100%;
+    }
   }
 
   .page-title {
