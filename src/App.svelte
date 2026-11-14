@@ -1,0 +1,94 @@
+<script>
+  import { onMount } from 'svelte';
+  import NavRail from './lib/components/NavRail.svelte';
+  import Library from './lib/views/Library.svelte';
+  import Explore from './lib/views/Explore.svelte';
+  import Details from './lib/views/Details.svelte';
+  import Reader from './lib/views/Reader.svelte';
+  import Settings from './lib/views/Settings.svelte';
+  import { appState, loadSettings } from './lib/stores/app.svelte.js';
+
+  onMount(async () => {
+    await loadSettings();
+  });
+</script>
+
+<div class="app-layout">
+  {#if appState.currentScreen !== 'reader'}
+    <NavRail />
+  {/if}
+
+  <main class="main-content">
+    {#if appState.currentScreen === 'history'}
+      <Library mode="history" />
+    {:else if appState.currentScreen === 'favorites'}
+      <Library mode="favorites" />
+    {:else if appState.currentScreen === 'explore'}
+      <Explore />
+    {:else if appState.currentScreen === 'feed'}
+      <Library mode="history" />
+    {:else if appState.currentScreen === 'downloads'}
+      <Library mode="history" />
+    {:else if appState.currentScreen === 'settings'}
+      <Settings />
+    {:else if appState.currentScreen === 'details'}
+      <Details />
+    {:else if appState.currentScreen === 'reader'}
+      <Reader />
+    {/if}
+  </main>
+
+  {#if appState.notification}
+    <div class="toast-notification">
+      <span>{appState.notification}</span>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .app-layout {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    background: var(--z-bg);
+    color: var(--z-text);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .main-content {
+    flex: 1;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    position: relative;
+  }
+
+  .toast-notification {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--z-surface-raised);
+    border: 1px solid var(--z-border);
+    border-left: 4px solid var(--z-accent);
+    padding: var(--z-space-3) var(--z-space-5);
+    border-radius: var(--z-radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    font-size: var(--z-text-sm);
+    font-weight: 500;
+    color: var(--z-text);
+    z-index: 200;
+    animation: toast-in 0.25s var(--z-ease-out);
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

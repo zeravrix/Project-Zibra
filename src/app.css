@@ -1,0 +1,164 @@
+/* === ZIBRAX DESIGN TOKENS (Svelte 5 + Tauri v2) === */
+
+:root {
+  /* Spacing Scale (4px base) */
+  --z-space-1: 4px;
+  --z-space-2: 8px;
+  --z-space-3: 12px;
+  --z-space-4: 16px;
+  --z-space-5: 20px;
+  --z-space-6: 24px;
+  --z-space-8: 32px;
+
+  /* Type Scale */
+  --z-text-xs: 11px;
+  --z-text-sm: 13px;
+  --z-text-base: 15px;
+  --z-text-lg: 18px;
+  --z-text-xl: 22px;
+  --z-text-2xl: 28px;
+
+  /* Corner Radius */
+  --z-radius-xs: 4px;
+  --z-radius-sm: 6px;
+  --z-radius-md: 10px;
+  --z-radius-lg: 14px;
+  --z-radius-xl: 20px;
+  --z-radius-full: 9999px;
+
+  /* Timing & Easing Curves */
+  --z-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --z-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --z-duration-fast: 150ms;
+  --z-duration-normal: 250ms;
+  --z-duration-slow: 400ms;
+
+  /* Primary Accent Defaults (Kotatsu Blue) */
+  --z-accent: #4285f4;
+  --z-accent-muted: rgba(66, 133, 244, 0.16);
+  --z-accent-glow: rgba(66, 133, 244, 0.35);
+
+  /* Fonts */
+  --z-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --z-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* === SEMANTIC THEMES === */
+
+/* Dark (Default) */
+:root, [data-theme="dark"] {
+  --z-bg: #0f131a;
+  --z-surface: #141923;
+  --z-surface-raised: #1c2331;
+  --z-surface-overlay: rgba(15, 19, 26, 0.85);
+  --z-text: #f3f5f9;
+  --z-text-muted: #8b95a5;
+  --z-border: rgba(255, 255, 255, 0.08);
+  --z-border-hover: rgba(255, 255, 255, 0.18);
+  --z-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --z-shadow-card-hover: 0 10px 28px var(--z-accent-glow);
+  --z-reader-bg: #0c0e14;
+}
+
+/* AMOLED Deep Pitch Black */
+[data-theme="amoled"] {
+  --z-bg: #000000;
+  --z-surface: #07080a;
+  --z-surface-raised: #111317;
+  --z-surface-overlay: rgba(0, 0, 0, 0.92);
+  --z-text: #f0f2f5;
+  --z-text-muted: #798292;
+  --z-border: rgba(255, 255, 255, 0.06);
+  --z-border-hover: rgba(255, 255, 255, 0.15);
+  --z-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.8);
+  --z-shadow-card-hover: 0 10px 28px var(--z-accent-glow);
+  --z-reader-bg: #000000;
+}
+
+/* Light */
+[data-theme="light"] {
+  --z-bg: #f8fafc;
+  --z-surface: #ffffff;
+  --z-surface-raised: #f1f5f9;
+  --z-surface-overlay: rgba(255, 255, 255, 0.88);
+  --z-text: #0f172a;
+  --z-text-muted: #64748b;
+  --z-border: rgba(0, 0, 0, 0.08);
+  --z-border-hover: rgba(0, 0, 0, 0.16);
+  --z-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --z-shadow-card-hover: 0 8px 24px rgba(66, 133, 244, 0.25);
+  --z-reader-bg: #ffffff;
+}
+
+/* Kotatsu 13 Accent Colors */
+[data-accent="blue"] { --z-accent: #4285f4; --z-accent-muted: rgba(66, 133, 244, 0.18); --z-accent-glow: rgba(66, 133, 244, 0.35); }
+[data-accent="purple"] { --z-accent: #a855f7; --z-accent-muted: rgba(168, 85, 247, 0.18); --z-accent-glow: rgba(168, 85, 247, 0.35); }
+[data-accent="teal"] { --z-accent: #14b8a6; --z-accent-muted: rgba(20, 184, 166, 0.18); --z-accent-glow: rgba(20, 184, 166, 0.35); }
+[data-accent="green"] { --z-accent: #22c55e; --z-accent-muted: rgba(34, 197, 94, 0.18); --z-accent-glow: rgba(34, 197, 94, 0.35); }
+[data-accent="red"] { --z-accent: #ef4444; --z-accent-muted: rgba(239, 68, 68, 0.18); --z-accent-glow: rgba(239, 68, 68, 0.35); }
+[data-accent="orange"] { --z-accent: #f97316; --z-accent-muted: rgba(249, 115, 22, 0.18); --z-accent-glow: rgba(249, 115, 22, 0.35); }
+[data-accent="pink"] { --z-accent: #ec4899; --z-accent-muted: rgba(236, 72, 153, 0.18); --z-accent-glow: rgba(236, 72, 153, 0.35); }
+[data-accent="yellow"] { --z-accent: #eab308; --z-accent-muted: rgba(234, 179, 8, 0.18); --z-accent-glow: rgba(234, 179, 8, 0.35); }
+
+/* === GLOBAL BASE RESETS === */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--z-bg);
+  color: var(--z-text);
+  font-family: var(--z-font-sans);
+  font-size: var(--z-text-base);
+  line-height: 1.5;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+button {
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+input, select {
+  font: inherit;
+  color: inherit;
+  outline: none;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--z-border);
+  border-radius: var(--z-radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--z-border-hover);
+}

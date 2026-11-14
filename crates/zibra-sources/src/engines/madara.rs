@@ -16,6 +16,7 @@ pub struct MadaraEngine {
     rank: u32,
     tags: Vec<SourceTag>,
     client: reqwest::Client,
+    list_path: Option<String>,
 }
 
 impl MadaraEngine {
@@ -36,7 +37,13 @@ impl MadaraEngine {
             rank,
             tags,
             client,
+            list_path: None,
         }
+    }
+
+    pub fn with_list_path(mut self, path: impl Into<String>) -> Self {
+        self.list_path = Some(path.into().trim_matches('/').to_string());
+        self
     }
 
     async fn fetch_html(&self, url: &str) -> anyhow::Result<String> {
@@ -109,6 +116,13 @@ impl MadaraEngine {
             ]
         } else {
             let mut list = Vec::new();
+            if let Some(ref lp) = self.list_path {
+                if p > 1 {
+                    list.push(format!("{}/{}/page/{}/?m_orderby={}", self.base_url, lp, p, order));
+                } else {
+                    list.push(format!("{}/{}/?m_orderby={}", self.base_url, lp, order));
+                }
+            }
             if p > 1 {
                 list.push(format!("{}/manga/page/{}/?m_orderby={}", self.base_url, p, order));
                 list.push(format!("{}/webtoons/page/{}/?m_orderby={}", self.base_url, p, order));

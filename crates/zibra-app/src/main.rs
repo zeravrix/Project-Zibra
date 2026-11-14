@@ -289,20 +289,6 @@ impl ZibraApp {
         let settings = settings_store.load();
         let library = LibraryStore::new(&app_dir).expect("Failed to open SQLite library");
         let registry = Arc::new(LiveSourceRegistry::new());
-        let reg_for_jvm = registry.clone();
-        let egui_ctx = cc.egui_ctx.clone();
-        rt.spawn(async move {
-            match reg_for_jvm.bind_jvm_host().await {
-                Ok(count) if count > 0 => {
-                    eprintln!("[ZIBRA] Successfully bound and upgraded {} Kotatsu sources via JVM host bridge", count);
-                    egui_ctx.request_repaint();
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("[ZIBRA] JVM host Kotatsu source bridge note: {}", e);
-                }
-            }
-        });
         let downloader = DesktopDownloader::new(&app_dir, settings.max_concurrent_downloads);
         let reader_pipeline = ReaderPagePipeline::new(&app_dir, settings.ram_cache_budget_mb);
         let cover_cache = CoverImageCache::new(&app_dir);

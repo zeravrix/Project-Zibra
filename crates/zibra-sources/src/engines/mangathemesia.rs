@@ -16,6 +16,7 @@ pub struct MangaThemesiaEngine {
     rank: u32,
     tags: Vec<SourceTag>,
     client: reqwest::Client,
+    list_path: Option<String>,
 }
 
 impl MangaThemesiaEngine {
@@ -36,7 +37,13 @@ impl MangaThemesiaEngine {
             rank,
             tags,
             client,
+            list_path: None,
         }
+    }
+
+    pub fn with_list_path(mut self, path: impl Into<String>) -> Self {
+        self.list_path = Some(path.into().trim_matches('/').to_string());
+        self
     }
 
     async fn fetch_html(&self, url: &str) -> anyhow::Result<String> {
@@ -162,8 +169,18 @@ impl Source for MangaThemesiaEngine {
 
     async fn popular(&self, page: u32) -> anyhow::Result<MangaPageResult> {
         let p = page.max(1);
-        let candidates = if p <= 1 {
-            vec![
+        let mut candidates = Vec::new();
+        if let Some(ref lp) = self.list_path {
+            if p <= 1 {
+                candidates.push(format!("{}/{}/?order=popular", self.base_url, lp));
+                candidates.push(format!("{}/{}/", self.base_url, lp));
+            } else {
+                candidates.push(format!("{}/{}/?page={}&order=popular", self.base_url, lp, p));
+                candidates.push(format!("{}/{}/page/{}/?order=popular", self.base_url, lp, p));
+            }
+        }
+        if p <= 1 {
+            candidates.extend(vec![
                 format!("{}/comics/?order=popular", self.base_url),
                 format!("{}/manga/?order=popular", self.base_url),
                 format!("{}/manga/?page=1&order=popular", self.base_url),
@@ -174,23 +191,33 @@ impl Source for MangaThemesiaEngine {
                 format!("{}/manga/", self.base_url),
                 format!("{}/series/", self.base_url),
                 format!("{}/", self.base_url),
-            ]
+            ]);
         } else {
-            vec![
+            candidates.extend(vec![
                 format!("{}/comics/?page={}&order=popular", self.base_url, p),
                 format!("{}/manga/?page={}&order=popular", self.base_url, p),
                 format!("{}/manga/page/{}/?order=popular", self.base_url, p),
                 format!("{}/series/?page={}&order=popular", self.base_url, p),
                 format!("{}/page/{}/", self.base_url, p),
-            ]
+            ]);
         };
         self.fetch_candidates(&candidates).await
     }
 
     async fn latest(&self, page: u32) -> anyhow::Result<MangaPageResult> {
         let p = page.max(1);
-        let candidates = if p <= 1 {
-            vec![
+        let mut candidates = Vec::new();
+        if let Some(ref lp) = self.list_path {
+            if p <= 1 {
+                candidates.push(format!("{}/{}/?order=update", self.base_url, lp));
+                candidates.push(format!("{}/{}/", self.base_url, lp));
+            } else {
+                candidates.push(format!("{}/{}/?page={}&order=update", self.base_url, lp, p));
+                candidates.push(format!("{}/{}/page/{}/?order=update", self.base_url, lp, p));
+            }
+        }
+        if p <= 1 {
+            candidates.extend(vec![
                 format!("{}/comics/?order=update", self.base_url),
                 format!("{}/manga/?order=update", self.base_url),
                 format!("{}/manga/?page=1&order=update", self.base_url),
@@ -198,14 +225,14 @@ impl Source for MangaThemesiaEngine {
                 format!("{}/comics/", self.base_url),
                 format!("{}/manga/", self.base_url),
                 format!("{}/", self.base_url),
-            ]
+            ]);
         } else {
-            vec![
+            candidates.extend(vec![
                 format!("{}/comics/?page={}&order=update", self.base_url, p),
                 format!("{}/manga/?page={}&order=update", self.base_url, p),
                 format!("{}/series/?page={}&order=update", self.base_url, p),
                 format!("{}/page/{}/", self.base_url, p),
-            ]
+            ]);
         };
         self.fetch_candidates(&candidates).await
     }

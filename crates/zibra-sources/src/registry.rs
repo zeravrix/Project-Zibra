@@ -1,8 +1,6 @@
-use crate::catalog_data::{EngineKind, CATALOG_SPECS};
 use crate::engines::{
     azora::AzoraSource,
     dilar::DilarSource,
-    generic_html::GenericHtmlEngine,
     hijala::HijalaSource,
     local::LocalFolderSource,
     madara::MadaraEngine,
@@ -11,23 +9,19 @@ use crate::engines::{
     mangathemesia::MangaThemesiaEngine,
     servers::SelfHostedServerSource,
     teamx::TeamXSource,
-    zeist::ZeistEngine,
 };
 use crate::{MangaPageResult, Source};
-use crate::jvm_host::{JvmHostClient, JvmHostSource};
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use zibra_core::{CatalogSortMode, LibraryStore, Manga, SourceTag};
+use zibra_core::{CatalogSortMode, SourceTag};
 
 pub struct LiveSourceRegistry {
-    sources: Arc<RwLock<Vec<Arc<dyn Source>>>>,
-    source_map: Arc<RwLock<HashMap<String, Arc<dyn Source>>>>,
+    sources: Vec<Arc<dyn Source>>,
+    source_map: HashMap<String, Arc<dyn Source>>,
     latency_ms: Arc<RwLock<HashMap<String, u64>>>,
-    jvm_client: Arc<RwLock<Option<Arc<JvmHostClient>>>>,
 }
 
 impl Default for LiveSourceRegistry {
@@ -39,307 +33,154 @@ impl Default for LiveSourceRegistry {
 impl LiveSourceRegistry {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(20))
-            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(25))
             .cookie_store(true)
-            .danger_accept_invalid_certs(true)
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
             .build()
             .unwrap_or_default();
 
-        let mut sources: Vec<Arc<dyn Source>> = Vec::with_capacity(CATALOG_SPECS.len() + 32);
+        let mut sources: Vec<Arc<dyn Source>> = vec![
+            Arc::new(MangaDexSource::new(client.clone())),
+            Arc::new(MangaSwatSource::new(client.clone())),
+            Arc::new(AzoraSource::new(client.clone())),
+            Arc::new(TeamXSource::new(client.clone())),
+            Arc::new(DilarSource::new(client.clone())),
+            Arc::new(MadaraEngine::new(
+                "MANGALEK",
+                "Mangalek",
+                "https://mangalik.net",
+                "ar",
+                5,
+                vec![SourceTag::Arabic, SourceTag::Manhwa, SourceTag::Popular, SourceTag::VerifiedWorking],
+                client.clone(),
+            )),
+            Arc::new(MadaraEngine::new(
+                "MANGASPARK",
+                "MangaSpark",
+                "https://sparkmanga.net",
+                "ar",
+                6,
+                vec![SourceTag::Arabic, SourceTag::Manhwa, SourceTag::VerifiedWorking],
+                client.clone(),
+            )),
+            Arc::new(HijalaSource::new(client.clone())),
+            Arc::new(MangaThemesiaEngine::new(
+                "ASURASCANS",
+                "Asura Scans",
+                "https://asuracomic.net",
+                "en",
+                8,
+                vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Webtoon, SourceTag::Popular, SourceTag::VerifiedWorking],
+                client.clone(),
+            )),
+            Arc::new(MangaThemesiaEngine::new(
+                "FLAMESCANS",
+                "Flame Comics",
+                "https://flamecomics.xyz",
+                "en",
+                9,
+                vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Webtoon, SourceTag::VerifiedWorking],
+                client.clone(),
+            )),
+            Arc::new(
+                MadaraEngine::new(
+                    "TOONILY",
+                    "Toonily",
+                    "https://toonily.com",
+                    "en",
+                    10,
+                    vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Webtoon, SourceTag::FastCdn],
+                    client.clone(),
+                )
+                .with_list_path("webtoon"),
+            ),
+            Arc::new(MadaraEngine::new(
+                "HARIMANGA",
+                "HariManga",
+                "https://harimanga.me",
+                "en",
+                11,
+                vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Webtoon],
+                client.clone(),
+            )),
+            Arc::new(MadaraEngine::new(
+                "LEKMANGA",
+                "LekManga",
+                "https://lekmanga.net",
+                "ar",
+                12,
+                vec![SourceTag::Arabic, SourceTag::Manhwa, SourceTag::Popular],
+                client.clone(),
+            )),
+            Arc::new(MadaraEngine::new(
+                "ARABTOONS",
+                "ArabToons",
+                "https://arabtoons.net",
+                "ar",
+                13,
+                vec![SourceTag::Arabic, SourceTag::Manhwa, SourceTag::Webtoon],
+                client.clone(),
+            )),
+            Arc::new(MadaraEngine::new(
+                "MANHWACLAN",
+                "ManhwaClan",
+                "https://manhwaclan.com",
+                "en",
+                14,
+                vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Webtoon],
+                client.clone(),
+            )),
+            Arc::new(MadaraEngine::new(
+                "KUNMANGA",
+                "KunManga",
+                "https://kunmanga.com",
+                "en",
+                15,
+                vec![SourceTag::English, SourceTag::Manhwa, SourceTag::Manhua],
+                client.clone(),
+            )),
+            Arc::new(LocalFolderSource::new(PathBuf::from("./downloads"))),
+            Arc::new(SelfHostedServerSource::new_komga("http://localhost:25600")),
+            Arc::new(SelfHostedServerSource::new_kavita("http://localhost:5000")),
+        ];
 
-        // 1. Flagship Built-in Native Sources (Priority Ranks 1..7)
-        sources.push(Arc::new(MangaDexSource::new(client.clone())));
-        sources.push(Arc::new(MangaSwatSource::new(client.clone())));
-        sources.push(Arc::new(AzoraSource::new(client.clone())));
-        sources.push(Arc::new(TeamXSource::new(client.clone())));
-        sources.push(Arc::new(MadaraEngine::new(
-            "MANGALEK",
-            "Mangalek",
-            "https://mangalik.net",
-            "ar",
-            5,
-            vec![
-                SourceTag::Arabic,
-                SourceTag::Manhwa,
-                SourceTag::Webtoon,
-                SourceTag::Popular,
-                SourceTag::VerifiedWorking,
-            ],
-            client.clone(),
-        )));
-        sources.push(Arc::new(MadaraEngine::new(
-            "MANGASPARK",
-            "MangaSpark",
-            "https://sparkmanga.net",
-            "ar",
-            6,
-            vec![
-                SourceTag::Arabic,
-                SourceTag::Manhwa,
-                SourceTag::Webtoon,
-                SourceTag::VerifiedWorking,
-            ],
-            client.clone(),
-        )));
-        sources.push(Arc::new(HijalaSource::new(client.clone())));
-        sources.push(Arc::new(DilarSource::new(client.clone())));
-
-        // 2. Full Multi-Language Kotatsu & Mihon Catalog (1,636+ Sources across 17 Languages)
-        for spec in CATALOG_SPECS {
-            let tags_vec = spec.tags.to_vec();
-            let engine_arc: Arc<dyn Source> = match spec.engine {
-                EngineKind::Madara => Arc::new(MadaraEngine::new(
-                    spec.id,
-                    spec.name,
-                    spec.base_url,
-                    spec.lang,
-                    spec.rank,
-                    tags_vec,
-                    client.clone(),
-                )),
-                EngineKind::MangaThemesia => Arc::new(MangaThemesiaEngine::new(
-                    spec.id,
-                    spec.name,
-                    spec.base_url,
-                    spec.lang,
-                    spec.rank,
-                    tags_vec,
-                    client.clone(),
-                )),
-                EngineKind::Zeist => Arc::new(ZeistEngine::new(
-                    spec.id,
-                    spec.name,
-                    spec.base_url,
-                    spec.lang,
-                    spec.rank,
-                    tags_vec,
-                    client.clone(),
-                )),
-                EngineKind::GenericHtml => Arc::new(GenericHtmlEngine::new(
-                    spec.id,
-                    spec.name,
-                    spec.base_url,
-                    spec.lang,
-                    spec.rank,
-                    tags_vec,
-                    client.clone(),
-                )),
-            };
-            sources.push(engine_arc);
+        // Catalog sources never replace hand-written ones that share a host.
+        let taken: HashSet<String> = sources.iter().map(|s| crate::catalog::host_key(s.base_url())).collect();
+        match crate::catalog::parse(crate::catalog::BUNDLED) {
+            Ok(records) => sources.extend(crate::catalog::build(&records, &client, &taken, 100).0),
+            Err(e) => eprintln!("zibra: bundled source catalog is invalid: {e}"),
         }
 
-        // 3. Local CBZ / Folder Library & Self-Hosted Servers (Komga & Kavita)
-        sources.push(Arc::new(LocalFolderSource::new(PathBuf::from("./downloads"))));
-        sources.push(Arc::new(SelfHostedServerSource::new_komga("http://localhost:25600")));
-        sources.push(Arc::new(SelfHostedServerSource::new_kavita("http://localhost:5000")));
-
-        // 4. Seamlessly import any user-configured repository web sources from ~/.zeravrix or ~/.zibra
-        Self::load_user_repository_sources(&mut sources, &client);
-
-        let mut source_map = HashMap::with_capacity(sources.len() * 2);
+        let mut source_map = HashMap::new();
         for s in &sources {
             source_map.insert(s.id().to_string(), s.clone());
-            source_map.insert(s.id().to_uppercase(), s.clone());
         }
 
-        let reg = Self {
-            sources: Arc::new(RwLock::new(sources)),
-            source_map: Arc::new(RwLock::new(source_map)),
+        Self {
+            sources,
+            source_map,
             latency_ms: Arc::new(RwLock::new(HashMap::new())),
-            jvm_client: Arc::new(RwLock::new(None)),
-        };
-
-        reg.spawn_jvm_binding_if_available();
-        reg
-    }
-
-    fn spawn_jvm_binding_if_available(&self) {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            let sources_lock = self.sources.clone();
-            let map_lock = self.source_map.clone();
-            let jvm_lock = self.jvm_client.clone();
-
-            tokio::spawn(async move {
-                match JvmHostClient::try_start().await {
-                    Ok(Some(client)) => {
-                        *jvm_lock.write() = Some(client.clone());
-                        if let Ok(list) = client.list_sources().await {
-                            let bound = Self::register_jvm_sources_into_registry(
-                                &sources_lock,
-                                &map_lock,
-                                client,
-                                list,
-                            );
-                            println!("[JVM-HOST] Bound and upgraded {} Kotatsu parser sources into ZIBRA registry!", bound);
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => eprintln!("[JVM-HOST] Initialization warning: {}", e),
-                }
-            });
         }
     }
 
-    pub async fn bind_jvm_host(&self) -> anyhow::Result<usize> {
-        let Some(client) = JvmHostClient::try_start().await? else {
-            return Ok(0);
-        };
-        *self.jvm_client.write() = Some(client.clone());
-        let list = client.list_sources().await?;
-        let count = Self::register_jvm_sources_into_registry(
-            &self.sources,
-            &self.source_map,
-            client,
-            list,
-        );
-        Ok(count)
+    pub fn total_count(&self) -> usize {
+        self.sources.len()
     }
 
-    fn register_jvm_sources_into_registry(
-        sources_lock: &Arc<RwLock<Vec<Arc<dyn Source>>>>,
-        map_lock: &Arc<RwLock<HashMap<String, Arc<dyn Source>>>>,
-        client: Arc<JvmHostClient>,
-        list: Vec<crate::jvm_host::HostSourceInfo>,
-    ) -> usize {
-        let count = list.len();
-        let mut s_w = sources_lock.write();
-        let mut m_w = map_lock.write();
-
-        for info in list {
-            let raw_id_str = info.id.to_string();
-            let mapped = LibraryStore::map_legacy_source_id(&raw_id_str);
-            let name_key = info.name.to_uppercase().replace([' ', '.', '-', '_'], "");
-            let name_upper = info.name.to_uppercase();
-
-            let existing_rank = s_w
-                .iter()
-                .find(|s| {
-                    s.id().eq_ignore_ascii_case(&raw_id_str)
-                        || (!mapped.is_empty() && s.id().eq_ignore_ascii_case(&mapped))
-                        || s.name().to_uppercase().replace([' ', '.', '-', '_'], "") == name_key
-                        || s.name().eq_ignore_ascii_case(&info.name)
-                })
-                .map(|s| s.priority_rank())
-                .unwrap_or(15);
-
-            let jvm_source = Arc::new(JvmHostSource::with_rank(client.clone(), &info, existing_rank));
-            let norm_id = jvm_source.id().to_string();
-            let norm_id_upper = norm_id.to_uppercase();
-
-            // Register all aliases into source_map so lookups route directly to the Kotatsu source
-            m_w.insert(norm_id, jvm_source.clone());
-            m_w.insert(norm_id_upper, jvm_source.clone());
-            m_w.insert(raw_id_str.clone(), jvm_source.clone());
-            m_w.insert(format!("builtin_{}", raw_id_str), jvm_source.clone());
-            m_w.insert(name_key.clone(), jvm_source.clone());
-            m_w.insert(name_upper, jvm_source.clone());
-            m_w.insert(info.name.clone(), jvm_source.clone());
-
-            if !mapped.is_empty() && mapped != raw_id_str {
-                m_w.insert(mapped.clone(), jvm_source.clone());
-                m_w.insert(mapped.to_uppercase(), jvm_source.clone());
-            }
-
-            // Upgrade or add into catalog list
-            if let Some(pos) = s_w.iter().position(|s| {
-                s.id().eq_ignore_ascii_case(jvm_source.id())
-                    || s.name().eq_ignore_ascii_case(jvm_source.name())
-                    || s.id().eq_ignore_ascii_case(&raw_id_str)
-                    || (!mapped.is_empty() && s.id().eq_ignore_ascii_case(&mapped))
-                    || s.name().to_uppercase().replace([' ', '.', '-', '_'], "") == name_key
-            }) {
-                s_w[pos] = jvm_source.clone();
-            } else {
-                s_w.push(jvm_source.clone());
-            }
-        }
-        count
-    }
-
-    fn load_user_repository_sources(sources: &mut Vec<Arc<dyn Source>>, client: &reqwest::Client) {
-        let Some(home) = dirs::home_dir() else { return };
-        let mut seen: HashSet<String> = sources.iter().map(|s| s.id().to_string()).collect();
-
-        for dir in [home.join(".zibra"), home.join(".zeravrix")] {
-            let props_file = dir.join("repository-web-sources.properties");
-            if let Ok(content) = fs::read_to_string(&props_file) {
-                let mut map = HashMap::new();
-                for line in content.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() || trimmed.starts_with('#') {
-                        continue;
-                    }
-                    if let Some((k, v)) = trimmed.split_once('=') {
-                        map.insert(
-                            k.trim().to_string(),
-                            v.trim().replace("\\:", ":").replace("\\=", "="),
-                        );
-                    }
-                }
-                let count = map
-                    .get("count")
-                    .and_then(|c| c.parse::<usize>().ok())
-                    .unwrap_or(0);
-                for idx in 0..count {
-                    let prefix = format!("source.{}.", idx);
-                    let Some(id) = map.get(&format!("{}id", prefix)) else { continue };
-                    let name = map
-                        .get(&format!("{}name", prefix))
-                        .cloned()
-                        .unwrap_or_else(|| format!("Repo Source {}", idx + 1));
-                    let lang = map
-                        .get(&format!("{}language", prefix))
-                        .cloned()
-                        .unwrap_or_else(|| "multi".to_string());
-                    let Some(home_url) = map.get(&format!("{}homeUrl", prefix)) else { continue };
-                    if !home_url.starts_with("http") {
-                        continue;
-                    }
-                    let sid = format!("REPO_{}", id);
-                    if seen.insert(sid.clone()) {
-                        sources.push(Arc::new(GenericHtmlEngine::new(
-                            sid,
-                            name,
-                            home_url.clone(),
-                            lang,
-                            2000 + (idx as u32),
-                            vec![SourceTag::Manhwa, SourceTag::Manga],
-                            client.clone(),
-                        )));
-                    }
-                }
-            }
+    pub fn visible_count(&self, nsfw_enabled: bool) -> usize {
+        if nsfw_enabled {
+            self.sources.len()
+        } else {
+            self.sources.iter().filter(|s| !s.is_nsfw()).count()
         }
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn Source>> {
-        let map = self.source_map.read();
-        if let Some(found) = map.get(id) {
-            return Some(found.clone());
-        }
-        let mapped = LibraryStore::map_legacy_source_id(id);
-        map.get(&mapped)
-            .or_else(|| map.get(&mapped.to_uppercase()))
-            .cloned()
+        self.source_map.get(id).cloned()
     }
 
-    pub fn all_sources(&self) -> Vec<Arc<dyn Source>> {
-        self.sources.read().clone()
-    }
-
-    pub fn total_count(&self) -> usize {
-        self.sources.read().len()
-    }
-
-    pub fn visible_count(&self, nsfw_enabled: bool) -> usize {
-        let s = self.sources.read();
-        if nsfw_enabled {
-            s.len()
-        } else {
-            s.iter().filter(|s| !s.is_nsfw()).count()
-        }
+    pub fn all_sources(&self) -> &[Arc<dyn Source>] {
+        &self.sources
     }
 
     pub fn latency_for(&self, id: &str) -> Option<u64> {
@@ -360,20 +201,17 @@ impl LiveSourceRegistry {
         nsfw_enabled: bool,
     ) -> Vec<Arc<dyn Source>> {
         let q = search_query.trim().to_lowercase();
-        let sources_snap = self.sources.read().clone();
-        let mut filtered: Vec<Arc<dyn Source>> = sources_snap
-            .into_iter()
+        let mut filtered: Vec<Arc<dyn Source>> = self
+            .sources
+            .iter()
             .filter(|s| {
                 if !nsfw_enabled && s.is_nsfw() {
                     return false;
                 }
-                let match_lang =
-                    lang_filter == "ALL" || s.language().eq_ignore_ascii_case(lang_filter);
+                let match_lang = lang_filter == "ALL" || s.language().eq_ignore_ascii_case(lang_filter);
                 let match_query = q.is_empty()
                     || s.name().to_lowercase().contains(&q)
                     || s.id().to_lowercase().contains(&q)
-                    || s.base_url().to_lowercase().contains(&q)
-                    || s.language().to_lowercase().contains(&q)
                     || s.tags().iter().any(|t| t.label().to_lowercase().contains(&q));
                 let match_tags = required_tags.is_empty()
                     || required_tags.iter().all(|req| {
@@ -385,6 +223,7 @@ impl LiveSourceRegistry {
                     });
                 match_lang && match_query && match_tags
             })
+            .cloned()
             .collect();
 
         let latencies = self.latency_ms.read().clone();
@@ -436,29 +275,29 @@ impl LiveSourceRegistry {
         } else {
             src.popular(page).await
         }?;
-        self.record_latency(src.id(), start.elapsed().as_millis() as u64);
+        self.record_latency(source_id, start.elapsed().as_millis() as u64);
         if !nsfw_enabled {
             res.items.retain(|m| !m.is_nsfw());
         }
         Ok(res)
     }
 
-    /// Global parallel search across top pinned/fast sources (matching ZERAVRIX LiveSourceRegistry.search)
     pub async fn search_global(
         &self,
         query: &str,
         pinned_ids: &HashSet<String>,
         nsfw_enabled: bool,
-    ) -> Vec<Manga> {
+    ) -> Vec<zibra_core::Manga> {
         let q = query.trim().to_string();
         if q.is_empty() {
             return Vec::new();
         }
-        let sources_snap = self.sources.read().clone();
-        let targets: Vec<Arc<dyn Source>> = sources_snap
-            .into_iter()
+        let targets: Vec<Arc<dyn Source>> = self
+            .sources
+            .iter()
             .filter(|s| (nsfw_enabled || !s.is_nsfw()) && (pinned_ids.contains(s.id()) || s.priority_rank() <= 12))
             .take(16)
+            .cloned()
             .collect();
 
         let mut handles = Vec::new();
@@ -489,4 +328,3 @@ impl LiveSourceRegistry {
         combined
     }
 }
-

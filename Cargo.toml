@@ -5,6 +5,7 @@ members = [
     "crates/zibra-sources",
     "crates/zibra-reader",
     "crates/zibra-app",
+    "src-tauri",
 ]
 
 [workspace.package]
