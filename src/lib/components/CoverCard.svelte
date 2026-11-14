@@ -180,21 +180,14 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
     opacity: 0;
-    transition: opacity var(--z-duration-normal) var(--z-ease-out),
-                transform var(--z-duration-slow) var(--z-ease-out);
+    transition: opacity var(--z-duration-normal) var(--z-ease-out);
     image-rendering: auto;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    transform: translateZ(0);
   }
 
   img.loaded {
     opacity: 1;
-  }
-
-  .card:hover img.loaded {
-    transform: scale(1.03);
   }
 
   .placeholder {

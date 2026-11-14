@@ -4,9 +4,9 @@
   import CoverGrid from '../components/CoverGrid.svelte';
   import SearchBar from '../components/SearchBar.svelte';
   import { appState, notify } from '../stores/app.svelte.js';
-  import { Heart, History, Trash2 } from 'lucide-svelte';
+  import { Heart, History, Trash2, Rss, Download } from 'lucide-svelte';
 
-  export let mode = 'history'; // 'history' | 'favorites'
+  export let mode = 'history'; // 'history' | 'favorites' | 'feed' | 'downloads'
 
   let mangas = [];
   let loading = true;
@@ -23,6 +23,21 @@
 
       if (mode === 'favorites') {
         mangas = favs;
+      } else if (mode === 'feed') {
+        mangas = favs;
+      } else if (mode === 'downloads') {
+        try {
+          const dls = await invoke('get_downloads');
+          mangas = dls.map(d => ({
+            id: d.manga_id,
+            title: d.manga_title || 'Downloaded Title',
+            cover_url: d.cover_url || '',
+            source_id: d.source_id,
+            url: ''
+          }));
+        } catch (_) {
+          mangas = [];
+        }
       } else {
         mangas = await invoke('get_history');
       }
@@ -93,6 +108,12 @@
         {#if mode === 'favorites'}
           <Heart size={26} class="title-icon fav" fill="currentColor" />
           Favourites
+        {:else if mode === 'feed'}
+          <Rss size={26} class="title-icon feed" />
+          Feed
+        {:else if mode === 'downloads'}
+          <Download size={26} class="title-icon dl" />
+          Downloads
         {:else}
           <History size={26} class="title-icon hist" />
           History
@@ -142,7 +163,15 @@
         {progressMap}
         {favoritesSet}
         onToggleFavorite={handleToggleFavorite}
-        emptyMessage={mode === 'favorites' ? 'No favourite manga yet. Explore to add some!' : 'No reading history yet.'}
+        emptyMessage={
+          mode === 'favorites' 
+            ? 'No favourite manga yet. Explore to add some!' 
+            : mode === 'feed'
+            ? 'No updates in your feed yet.'
+            : mode === 'downloads'
+            ? 'No downloaded chapters found.'
+            : 'No reading history yet.'
+        }
       />
     {/if}
   </div>
@@ -183,6 +212,14 @@
 
   :global(.title-icon.fav) {
     color: #ef4444;
+  }
+
+  :global(.title-icon.feed) {
+    color: #f59e0b;
+  }
+
+  :global(.title-icon.dl) {
+    color: #10b981;
   }
 
   :global(.title-icon.hist) {

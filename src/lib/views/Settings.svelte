@@ -1,28 +1,25 @@
 <script>
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
   import { appState, updateSettings, notify } from '../stores/app.svelte.js';
   import { 
-    Settings, Palette, ShieldAlert, Cpu, HardDrive, 
-    BookOpen, Layers, Check, Sparkles, Sliders, Trash2,
-    RotateCcw, Eye, Zap, ShieldCheck, Compass
+    Palette, BookOpen, Zap, ShieldCheck, Check, 
+    Sparkles, Trash2, ArrowRight
   } from 'lucide-svelte';
 
   let currentSettings = $state(null);
 
-  // 12 curated palettes matching Rust ColorTheme enum
   const palettes = [
-    { id: 'Totoro', name: 'Zibrax Blue', color: '#4285f4', desc: 'Signature electric cyan-blue bloom' },
-    { id: 'Monet', name: 'Sky Monet', color: '#38bdf8', desc: 'Material adaptive ambient azure' },
-    { id: 'Miku', name: 'Cyber Teal', color: '#06b6d4', desc: 'Futuristic glowing cyan & teal' },
-    { id: 'Mion', name: 'Emerald Sage', color: '#34d399', desc: 'Lush soothing forest emerald' },
-    { id: 'Itsuka', name: 'Solar Amber', color: '#fbbf24', desc: 'Warm glowing twilight gold' },
-    { id: 'Orange', name: 'Flame Sunset', color: '#f97316', desc: 'Vibrant fiery solar gradient' },
+    { id: 'Totoro', name: 'Zibrax Blue', color: '#4285f4', desc: 'Electric cyan-blue neon bloom' },
+    { id: 'Monet', name: 'Sky Azure', color: '#38bdf8', desc: 'Ambient material sky blue' },
+    { id: 'Miku', name: 'Cyber Teal', color: '#06b6d4', desc: 'Futuristic glowing cyber teal' },
+    { id: 'Mion', name: 'Emerald', color: '#34d399', desc: 'Lush soothing forest emerald' },
+    { id: 'Itsuka', name: 'Amber Gold', color: '#fbbf24', desc: 'Warm glowing twilight gold' },
+    { id: 'Orange', name: 'Flame Sunset', color: '#f97316', desc: 'Fiery solar sunset gradient' },
     { id: 'Asuka', name: 'Eva Crimson', color: '#ef4444', desc: 'High-energy vivid crimson coral' },
     { id: 'Sakura', name: 'Sakura Rose', color: '#fb7185', desc: 'Delicate cherry blossom petal pink' },
     { id: 'Expressive', name: 'Neon Lilac', color: '#c084fc', desc: 'Expressive synthwave purple' },
-    { id: 'Rikka', name: 'Pastel Violet', color: '#a78bfa', desc: 'Soft deep lavender aesthetic' },
-    { id: 'Kanade', name: 'Slate Graphite', color: '#94a3b8', desc: 'Refined minimalist metallic slate' },
+    { id: 'Rikka', name: 'Pastel Violet', color: '#a78bfa', desc: 'Deep pastel lavender purple' },
+    { id: 'Kanade', name: 'Platinum', color: '#94a3b8', desc: 'Minimalist metallic platinum slate' },
     { id: 'HighContrast', name: 'Pure White', color: '#ffffff', desc: 'Crisp ultra-contrast monochrome' },
   ];
 
@@ -39,7 +36,7 @@
     {
       id: 'amoled',
       label: 'Midnight OLED',
-      desc: 'True #000000 pitch black for battery & OLED',
+      desc: 'Pure #000000 pitch black for battery & OLED',
       isAmoled: true,
       theme: 'Dark',
       bgPreview: '#000000',
@@ -48,7 +45,7 @@
     {
       id: 'light',
       label: 'Porcelain Light',
-      desc: 'Crisp, high-readability daytime brightness',
+      desc: 'Crisp, high-contrast daytime brightness',
       isAmoled: false,
       theme: 'Light',
       bgPreview: '#f8fafc',
@@ -57,14 +54,14 @@
   ];
 
   const readerModes = [
-    { id: 'Vertical', label: 'Webtoon', desc: 'Seamless continuous vertical strip' },
-    { id: 'Single', label: 'Single Page', desc: 'Classic horizontal slide' },
-    { id: 'Double', label: 'Double Spread', desc: 'Side-by-side manga layout' },
-    { id: 'Auto', label: 'Auto Detect', desc: 'Adapts to manhwa vs manga' },
+    { id: 'Vertical', label: 'Webtoon', desc: 'Continuous vertical strip' },
+    { id: 'Single', label: 'Single Page', desc: 'Horizontal page flip' },
+    { id: 'Double', label: 'Double Spread', desc: 'Side-by-side spread' },
+    { id: 'Auto', label: 'Auto Detect', desc: 'Smart comic detection' },
   ];
 
   const readingDirections = [
-    { id: 'LTR', label: 'Left to Right (LTR)', desc: 'Standard manhwa / comic flow' },
+    { id: 'LTR', label: 'Left to Right (LTR)', desc: 'Standard manhwa / webtoon flow' },
     { id: 'RTL', label: 'Right to Left (RTL)', desc: 'Traditional Japanese manga' },
   ];
 
@@ -83,15 +80,6 @@
     const idx = palettes.findIndex(p => p.id.toLowerCase() === current);
     if (idx !== -1) {
       selectedPaletteIndex = idx;
-    }
-  }
-
-  async function handleSliderChange(e) {
-    selectedPaletteIndex = Number(e.target.value);
-    const p = palettes[selectedPaletteIndex];
-    if (p && currentSettings) {
-      currentSettings.color_theme = p.id;
-      await save();
     }
   }
 
@@ -141,6 +129,65 @@
     notify('Image cache and temporary buffers cleared');
   }
 
+  // Custom Slider Dragging Engine (No default HTML inputs)
+  function handleTrackClick(e, field, min, max, step) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    let val = min + ratio * (max - min);
+    if (step) {
+      val = Math.round(val / step) * step;
+    }
+    handleRangeChange(field, val);
+  }
+
+  function startSliderDrag(field, min, max, step, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const onMove = (ev) => {
+      const track = document.getElementById(`track-${field}`);
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      let val = min + ratio * (max - min);
+      if (step) {
+        val = Math.round(val / step) * step;
+      }
+      handleRangeChange(field, val);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  function handlePaletteTrackClick(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const idx = Math.min(palettes.length - 1, Math.floor(ratio * palettes.length));
+    selectPalette(palettes[idx], idx);
+  }
+
+  function startPaletteDrag(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const onMove = (ev) => {
+      const track = document.getElementById('palette-ribbon-track');
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      const idx = Math.min(palettes.length - 1, Math.floor(ratio * palettes.length));
+      selectPalette(palettes[idx], idx);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
   let activePalette = $derived(palettes[selectedPaletteIndex] || palettes[0]);
 </script>
 
@@ -148,25 +195,25 @@
   <header class="settings-hero">
     <div class="hero-left">
       <div class="settings-badge">
-        <Sparkles size={13} />
-        <span>PREFERENCES & ENGINE</span>
+        <Sparkles size={12} />
+        <span>PREFERENCES</span>
       </div>
       <h1 class="page-title">Settings & Customization</h1>
-      <p class="page-desc">Fine-tune appearance depth, reading layout, network guardrails, and cache budgets.</p>
+      <p class="page-desc">Customize theme aesthetics, reader layout, and resource budgets.</p>
     </div>
   </header>
 
   {#if currentSettings}
     <div class="settings-grid">
-      <!-- 1. APPEARANCE & THEME DEPTH -->
-      <section class="config-card">
+      <!-- 1. BESPOKE THEME SPECTRUM & DEPTH -->
+      <section class="custom-card">
         <div class="card-title-row">
           <div class="card-icon-bubble">
             <Palette size={18} />
           </div>
           <div>
             <h2 class="card-title">Theme Accent & Color Palette</h2>
-            <p class="card-subtitle">Drag the line slider to glide through reactive accent spectrums</p>
+            <p class="card-subtitle">Glide along the interactive spectrum ribbon to transform all accents</p>
           </div>
         </div>
 
@@ -182,23 +229,24 @@
           </div>
         </div>
 
-        <!-- DRAGGABLE LINE SPECTRUM SLIDER -->
-        <div class="spectrum-slider-block">
-          <div class="spectrum-track-wrap">
-            <div class="spectrum-line-gradient"></div>
-            <input
-              type="range"
-              min="0"
-              max={palettes.length - 1}
-              step="1"
-              value={selectedPaletteIndex}
-              on:input={handleSliderChange}
-              class="spectrum-range-input"
-              style="--thumb-color: {activePalette.color}"
-            />
+        <!-- BESPOKE SPECTRUM RIBBON (ZERO DEFAULT HTML SLIDERS) -->
+        <div class="custom-spectrum-wrap">
+          <div
+            id="palette-ribbon-track"
+            class="spectrum-ribbon-bar"
+            on:click={handlePaletteTrackClick}
+          >
+            <div
+              class="spectrum-drag-handle"
+              style="left: {(selectedPaletteIndex / (palettes.length - 1)) * 100}%; --handle-color: {activePalette.color}"
+              on:mousedown={startPaletteDrag}
+            >
+              <div class="handle-inner-dot"></div>
+            </div>
           </div>
-          <div class="spectrum-legend">
-            <span>Electric Blue</span>
+
+          <div class="spectrum-legend-labels">
+            <span>Blue</span>
             <span>Teal</span>
             <span>Amber</span>
             <span>Crimson</span>
@@ -206,29 +254,28 @@
           </div>
         </div>
 
-        <!-- PALETTE TILES (TACTILE CHOOSER) -->
-        <div class="palette-tiles-strip">
+        <!-- PALETTE CHIPS -->
+        <div class="palette-chips-grid">
           {#each palettes as p, i}
             <button
-              class="palette-chip"
+              class="palette-chip-btn"
               class:active={selectedPaletteIndex === i}
-              style="--chip-color: {p.color}"
+              style="--chip-accent: {p.color}"
               on:click={() => selectPalette(p, i)}
-              title="{p.name} ({p.color})"
             >
-              <span class="chip-dot" style="background: {p.color}"></span>
-              <span class="chip-label">{p.name.split(' ')[0]}</span>
+              <span class="chip-color-dot" style="background: {p.color}"></span>
+              <span class="chip-title">{p.name}</span>
               {#if selectedPaletteIndex === i}
-                <Check size={12} class="chip-check" />
+                <Check size={13} class="chip-check-icon" />
               {/if}
             </button>
           {/each}
         </div>
 
-        <!-- BACKGROUND MODE 3D ELEVATED CARDS -->
-        <div class="sub-setting-group">
-          <label class="group-label">Display Atmosphere & Contrast</label>
-          <div class="bg-mode-cards">
+        <!-- 3D BACKGROUND ATMOSPHERE CARDS -->
+        <div class="field-subgroup">
+          <label class="group-title">Display Atmosphere</label>
+          <div class="bg-mode-grid">
             {#each backgroundModes as mode}
               {@const isSelected = (mode.isAmoled && currentSettings.is_amoled) || (!currentSettings.is_amoled && currentSettings.theme === mode.theme)}
               <div
@@ -263,7 +310,7 @@
       </section>
 
       <!-- 2. READER ENGINE & LAYOUT -->
-      <section class="config-card">
+      <section class="custom-card">
         <div class="card-title-row">
           <div class="card-icon-bubble">
             <BookOpen size={18} />
@@ -274,93 +321,97 @@
           </div>
         </div>
 
-        <!-- READER MODE SEGMENTED CONTROL -->
-        <div class="sub-setting-group">
-          <label class="group-label">Reading Mode</label>
-          <div class="segmented-picker">
+        <!-- READING MODE SEGMENTED CONTROL -->
+        <div class="field-subgroup">
+          <label class="group-title">Reading Mode</label>
+          <div class="custom-segmented-bar">
             {#each readerModes as mode}
               <button
-                class="seg-pill-btn"
+                class="seg-button"
                 class:active={currentSettings.reader_mode === mode.id}
                 on:click={() => selectReaderMode(mode.id)}
               >
-                <span class="pill-label">{mode.label}</span>
+                <span>{mode.label}</span>
               </button>
             {/each}
           </div>
         </div>
 
         <!-- READING DIRECTION SEGMENTED CONTROL -->
-        <div class="sub-setting-group">
-          <label class="group-label">Reading Direction</label>
-          <div class="segmented-picker">
+        <div class="field-subgroup">
+          <label class="group-title">Reading Direction</label>
+          <div class="custom-segmented-bar">
             {#each readingDirections as dir}
               <button
-                class="seg-pill-btn"
+                class="seg-button"
                 class:active={currentSettings.reading_direction === dir.id}
                 on:click={() => selectReadingDirection(dir.id)}
               >
-                <span class="pill-label">{dir.label}</span>
+                <span>{dir.label}</span>
               </button>
             {/each}
           </div>
         </div>
 
-        <!-- IMAGE FIT TACTILE SWITCH -->
-        <div class="interactive-row">
+        <!-- IMAGE FIT TOGGLE -->
+        <div class="interactive-option-row">
           <div class="row-info">
             <span class="row-label">Fit to Width</span>
             <span class="row-desc">Automatically scale manhwa images to match screen width seamlessly</span>
           </div>
           <button
-            class="switch-control"
+            class="bespoke-switch"
             class:checked={currentSettings.fit_to_width}
             on:click={() => toggleSetting('fit_to_width')}
           >
-            <div class="switch-thumb"></div>
+            <div class="switch-ball"></div>
           </button>
         </div>
 
-        <!-- SEAM TRIM / GAP SLIDER LINE -->
-        <div class="slider-field">
-          <div class="slider-meta">
+        <!-- BESPOKE SEAM TRIM SLIDER -->
+        <div class="bespoke-slider-card">
+          <div class="slider-header-meta">
             <div>
-              <span class="field-title">Page Seam Gap Trimmer</span>
-              <span class="field-desc">Eliminates slice seams between sliced manhwa chapters</span>
+              <span class="meta-label">Page Seam Gap Trimmer</span>
+              <span class="meta-hint">Trims slice seams between continuous manhwa pages</span>
             </div>
-            <span class="field-badge">{currentSettings.seam_trim_px} px</span>
+            <span class="numeric-badge">{currentSettings.seam_trim_px} px</span>
           </div>
-          <div class="styled-range-wrap">
-            <input
-              type="range"
-              min="0"
-              max="32"
-              step="2"
-              value={currentSettings.seam_trim_px}
-              on:input={(e) => handleRangeChange('seam_trim_px', e.target.value)}
-              class="styled-range-input"
-            />
+          <div
+            id="track-seam_trim_px"
+            class="custom-slider-track"
+            on:click={(e) => handleTrackClick(e, 'seam_trim_px', 0, 32, 2)}
+          >
+            <div
+              class="custom-slider-fill"
+              style="width: {(currentSettings.seam_trim_px / 32) * 100}%"
+            ></div>
+            <div
+              class="custom-slider-thumb"
+              style="left: {(currentSettings.seam_trim_px / 32) * 100}%"
+              on:mousedown={(e) => startSliderDrag('seam_trim_px', 0, 32, 2, e)}
+            ></div>
           </div>
         </div>
 
-        <!-- AUTO CROP TOGGLE -->
-        <div class="interactive-row">
+        <!-- AUTO-CROP MARGINS TOGGLE -->
+        <div class="interactive-option-row">
           <div class="row-info">
             <span class="row-label">Auto-Crop Scan Margins</span>
             <span class="row-desc">Detects and trims excessive white borders around scanned pages</span>
           </div>
           <button
-            class="switch-control"
+            class="bespoke-switch"
             class:checked={currentSettings.auto_crop_margins}
             on:click={() => toggleSetting('auto_crop_margins')}
           >
-            <div class="switch-thumb"></div>
+            <div class="switch-ball"></div>
           </button>
         </div>
       </section>
 
-      <!-- 3. PERFORMANCE & CACHE -->
-      <section class="config-card">
+      <!-- 3. PERFORMANCE & CACHE BUDGETS -->
+      <section class="custom-card">
         <div class="card-title-row">
           <div class="card-icon-bubble">
             <Zap size={18} />
@@ -371,110 +422,118 @@
           </div>
         </div>
 
-        <!-- RAM CACHE SLIDER LINE -->
-        <div class="slider-field">
-          <div class="slider-meta">
+        <!-- BESPOKE RAM CACHE SLIDER -->
+        <div class="bespoke-slider-card">
+          <div class="slider-header-meta">
             <div>
-              <span class="field-title">RAM Image Cache Allocation</span>
-              <span class="field-desc">High-speed decoded texture memory for instant page transitions</span>
+              <span class="meta-label">RAM Image Cache Allocation</span>
+              <span class="meta-hint">Decoded texture memory for instant page turns</span>
             </div>
-            <span class="field-badge">{currentSettings.ram_cache_budget_mb} MB</span>
+            <span class="numeric-badge">{currentSettings.ram_cache_budget_mb} MB</span>
           </div>
-          <div class="styled-range-wrap">
-            <input
-              type="range"
-              min="128"
-              max="2048"
-              step="128"
-              value={currentSettings.ram_cache_budget_mb}
-              on:input={(e) => handleRangeChange('ram_cache_budget_mb', e.target.value)}
-              class="styled-range-input"
-            />
+          <div
+            id="track-ram_cache_budget_mb"
+            class="custom-slider-track"
+            on:click={(e) => handleTrackClick(e, 'ram_cache_budget_mb', 128, 2048, 128)}
+          >
+            <div
+              class="custom-slider-fill"
+              style="width: {((currentSettings.ram_cache_budget_mb - 128) / (2048 - 128)) * 100}%"
+            ></div>
+            <div
+              class="custom-slider-thumb"
+              style="left: {((currentSettings.ram_cache_budget_mb - 128) / (2048 - 128)) * 100}%"
+              on:mousedown={(e) => startSliderDrag('ram_cache_budget_mb', 128, 2048, 128, e)}
+            ></div>
           </div>
         </div>
 
-        <!-- CONCURRENT DOWNLOADS SLIDER LINE -->
-        <div class="slider-field">
-          <div class="slider-meta">
+        <!-- BESPOKE CONCURRENT DOWNLOADS SLIDER -->
+        <div class="bespoke-slider-card">
+          <div class="slider-header-meta">
             <div>
-              <span class="field-title">Concurrent Page Download Workers</span>
-              <span class="field-desc">Parallel network streams for chapters and cover artwork</span>
+              <span class="meta-label">Concurrent Download Workers</span>
+              <span class="meta-hint">Parallel network streams for chapters and artwork</span>
             </div>
-            <span class="field-badge">{currentSettings.max_concurrent_downloads} workers</span>
+            <span class="numeric-badge">{currentSettings.max_concurrent_downloads} threads</span>
           </div>
-          <div class="styled-range-wrap">
-            <input
-              type="range"
-              min="1"
-              max="8"
-              step="1"
-              value={currentSettings.max_concurrent_downloads}
-              on:input={(e) => handleRangeChange('max_concurrent_downloads', e.target.value)}
-              class="styled-range-input"
-            />
+          <div
+            id="track-max_concurrent_downloads"
+            class="custom-slider-track"
+            on:click={(e) => handleTrackClick(e, 'max_concurrent_downloads', 1, 8, 1)}
+          >
+            <div
+              class="custom-slider-fill"
+              style="width: {((currentSettings.max_concurrent_downloads - 1) / 7) * 100}%"
+            ></div>
+            <div
+              class="custom-slider-thumb"
+              style="left: {((currentSettings.max_concurrent_downloads - 1) / 7) * 100}%"
+              on:mousedown={(e) => startSliderDrag('max_concurrent_downloads', 1, 8, 1, e)}
+            ></div>
           </div>
         </div>
 
-        <!-- INFINITE CHAPTER SCROLL -->
-        <div class="interactive-row">
+        <!-- CONTINUOUS CHAPTER FLOW TOGGLE -->
+        <div class="interactive-option-row">
           <div class="row-info">
             <span class="row-label">Continuous Chapter Flow</span>
-            <span class="row-desc">Automatically transition to the next chapter at the end of a chapter</span>
+            <span class="row-desc">Seamlessly load next chapter upon reaching the final page</span>
           </div>
           <button
-            class="switch-control"
+            class="bespoke-switch"
             class:checked={currentSettings.infinite_chapter_scroll}
             on:click={() => toggleSetting('infinite_chapter_scroll')}
           >
-            <div class="switch-thumb"></div>
+            <div class="switch-ball"></div>
           </button>
         </div>
       </section>
 
-      <!-- 4. CONTENT & SOURCES -->
-      <section class="config-card">
+      <!-- 4. CONTENT & PRIVACY -->
+      <section class="custom-card">
         <div class="card-title-row">
           <div class="card-icon-bubble">
             <ShieldCheck size={18} />
           </div>
           <div>
             <h2 class="card-title">Sources & Content Filters</h2>
-            <p class="card-subtitle">Configure 1,190+ sources visibility and security policies</p>
+            <p class="card-subtitle">Manage catalog visibility and secure networking</p>
           </div>
         </div>
 
         <!-- ADULT / NSFW TOGGLE -->
-        <div class="interactive-row">
+        <div class="interactive-option-row">
           <div class="row-info">
             <span class="row-label">Include 18+ Mature Content</span>
-            <span class="row-desc">Show adult manhwa, ecchi, and mature catalogs in Explore</span>
+            <span class="row-desc">Show adult sources and titles in catalog search</span>
           </div>
           <button
-            class="switch-control"
+            class="bespoke-switch"
             class:checked={currentSettings.nsfw_enabled}
             on:click={() => toggleSetting('nsfw_enabled')}
           >
-            <div class="switch-thumb"></div>
+            <div class="switch-ball"></div>
           </button>
         </div>
 
         <!-- DNS OVER HTTPS (DOH) -->
-        <div class="interactive-row">
+        <div class="interactive-option-row">
           <div class="row-info">
             <span class="row-label">DNS-over-HTTPS (DoH)</span>
             <span class="row-desc">Bypasses ISP DNS blocking and protects reading privacy</span>
           </div>
           <button
-            class="switch-control"
+            class="bespoke-switch"
             class:checked={currentSettings.dns_over_https}
             on:click={() => toggleSetting('dns_over_https')}
           >
-            <div class="switch-thumb"></div>
+            <div class="switch-ball"></div>
           </button>
         </div>
 
         <!-- CLEAR CACHE ACTION -->
-        <div class="maintenance-row">
+        <div class="danger-option-row">
           <div class="row-info">
             <span class="row-label">Disk Storage & Cover Cache</span>
             <span class="row-desc">Purges cached thumbnails, temporary downloads, and scraper cookies</span>
@@ -538,7 +597,7 @@
     padding-bottom: 60px;
   }
 
-  .config-card {
+  .custom-card {
     background: rgba(18, 18, 28, 0.7);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -637,27 +696,18 @@
     color: var(--z-text-muted);
   }
 
-  /* DRAGGABLE LINE SPECTRUM SLIDER */
-  .spectrum-slider-block {
+  /* BESPOKE SPECTRUM RIBBON */
+  .custom-spectrum-wrap {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 0;
+    gap: 10px;
+    padding: 8px 0;
   }
 
-  .spectrum-track-wrap {
+  .spectrum-ribbon-bar {
     position: relative;
     width: 100%;
-    height: 36px;
-    display: flex;
-    align-items: center;
-  }
-
-  .spectrum-line-gradient {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 8px;
+    height: 14px;
     border-radius: 9999px;
     background: linear-gradient(90deg, 
       #4285f4 0%, 
@@ -670,56 +720,57 @@
       #fb7185 85%, 
       #c084fc 100%
     );
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
-  }
-
-  .spectrum-range-input {
-    position: relative;
-    width: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
     cursor: pointer;
-    z-index: 2;
-    margin: 0;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.12), inset 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
-  .spectrum-range-input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 24px;
-    height: 24px;
+  .spectrum-drag-handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: #ffffff;
-    border: 3px solid var(--thumb-color, #4285f4);
-    box-shadow: 0 0 16px var(--thumb-color, #4285f4), 0 2px 6px rgba(0, 0, 0, 0.5);
+    border: 3px solid var(--handle-color, #4285f4);
+    box-shadow: 0 0 20px var(--handle-color, #4285f4), 0 3px 8px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: grab;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s ease;
   }
 
-  .spectrum-range-input::-webkit-slider-thumb:active {
+  .spectrum-drag-handle:active {
     cursor: grabbing;
-    transform: scale(1.2);
-    box-shadow: 0 0 24px var(--thumb-color, #4285f4);
+    transform: translate(-50%, -50%) scale(1.15);
   }
 
-  .spectrum-legend {
+  .handle-inner-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--handle-color, #4285f4);
+  }
+
+  .spectrum-legend-labels {
     display: flex;
     justify-content: space-between;
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     color: var(--z-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
   }
 
-  /* PALETTE TILES STRIP */
-  .palette-tiles-strip {
+  /* PALETTE CHIPS */
+  .palette-chips-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
   }
 
-  .palette-chip {
+  .palette-chip-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -734,12 +785,12 @@
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .palette-chip:hover {
+  .palette-chip-btn:hover {
     background: rgba(255, 255, 255, 0.08);
     transform: translateY(-2px);
   }
 
-  .palette-chip.active {
+  .palette-chip-btn.active {
     background: var(--z-accent-muted);
     border-color: var(--z-accent);
     color: #ffffff;
@@ -747,27 +798,31 @@
     box-shadow: 0 0 14px var(--z-accent-glow);
   }
 
-  .chip-dot {
+  .chip-color-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
   }
 
-  /* BACKGROUND MODE CARDS */
-  .sub-setting-group {
+  :global(.chip-check-icon) {
+    color: var(--z-accent);
+  }
+
+  /* FIELD SUBGROUPS & BACKGROUND CARDS */
+  .field-subgroup {
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
 
-  .group-label {
+  .group-title {
     font-size: 13px;
     font-weight: 600;
     color: var(--z-text);
   }
 
-  .bg-mode-cards {
+  .bg-mode-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 14px;
@@ -871,8 +926,8 @@
     line-height: 1.35;
   }
 
-  /* SEGMENTED PICKER */
-  .segmented-picker {
+  /* CUSTOM SEGMENTED BARS */
+  .custom-segmented-bar {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 6px;
@@ -882,7 +937,7 @@
     border-radius: 12px;
   }
 
-  .seg-pill-btn {
+  .seg-button {
     padding: 10px 14px;
     border-radius: 8px;
     border: none;
@@ -894,25 +949,105 @@
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .seg-pill-btn:hover {
+  .seg-button:hover {
     color: #ffffff;
     background: rgba(255, 255, 255, 0.04);
   }
 
-  .seg-pill-btn.active {
+  .seg-button.active {
     background: var(--z-accent);
     color: #ffffff;
     font-weight: 700;
     box-shadow: 0 2px 10px var(--z-accent-glow);
   }
 
-  /* INTERACTIVE ROWS */
-  .interactive-row {
+  /* BESPOKE SLIDER CARDS */
+  .bespoke-slider-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+
+  .slider-header-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .meta-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--z-text);
+    display: block;
+  }
+
+  .meta-hint {
+    font-size: 11.5px;
+    color: var(--z-text-muted);
+  }
+
+  .numeric-badge {
+    font-family: var(--z-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--z-accent);
+    background: var(--z-accent-muted);
+    padding: 3px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--z-accent-glow);
+  }
+
+  .custom-slider-track {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .custom-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--z-accent);
+    border-radius: 9999px;
+    box-shadow: 0 0 10px var(--z-accent-glow);
+  }
+
+  .custom-slider-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid var(--z-accent);
+    box-shadow: 0 0 12px var(--z-accent-glow), 0 2px 6px rgba(0, 0, 0, 0.4);
+    cursor: grab;
+    transition: transform 0.15s ease;
+  }
+
+  .custom-slider-thumb:active {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+
+  /* OPTION ROWS & BESPOKE SWITCHES */
+  .interactive-option-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 16px;
+    padding: 12px 18px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
@@ -935,8 +1070,7 @@
     color: var(--z-text-muted);
   }
 
-  /* SWITCH CONTROL */
-  .switch-control {
+  .bespoke-switch {
     width: 48px;
     height: 26px;
     border-radius: 9999px;
@@ -948,13 +1082,13 @@
     flex-shrink: 0;
   }
 
-  .switch-control.checked {
+  .bespoke-switch.checked {
     background: var(--z-accent);
     border-color: var(--z-accent);
     box-shadow: 0 0 12px var(--z-accent-glow);
   }
 
-  .switch-thumb {
+  .switch-ball {
     width: 20px;
     height: 20px;
     border-radius: 50%;
@@ -966,68 +1100,17 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
 
-  .switch-control.checked .switch-thumb {
+  .bespoke-switch.checked .switch-ball {
     transform: translateX(22px);
   }
 
-  /* STYLED RANGE SLIDERS */
-  .slider-field {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-  }
-
-  .slider-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .field-title {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--z-text);
-    display: block;
-  }
-
-  .field-desc {
-    font-size: 11.5px;
-    color: var(--z-text-muted);
-  }
-
-  .field-badge {
-    font-family: var(--z-font-mono);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--z-accent);
-    background: var(--z-accent-muted);
-    padding: 3px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--z-accent-glow);
-  }
-
-  .styled-range-wrap {
-    width: 100%;
-  }
-
-  .styled-range-input {
-    width: 100%;
-    accent-color: var(--z-accent);
-    height: 6px;
-    cursor: pointer;
-  }
-
-  /* MAINTENANCE ROW */
-  .maintenance-row {
+  /* DANGER MAINTENANCE */
+  .danger-option-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 14px 16px;
+    padding: 14px 18px;
     background: rgba(239, 68, 68, 0.06);
     border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: 12px;

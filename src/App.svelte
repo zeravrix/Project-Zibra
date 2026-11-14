@@ -29,9 +29,9 @@
     {:else if appState.currentScreen === 'sources'}
       <Explore initialMode="catalog" />
     {:else if appState.currentScreen === 'feed'}
-      <Library mode="history" />
+      <Library mode="feed" />
     {:else if appState.currentScreen === 'downloads'}
-      <Library mode="history" />
+      <Library mode="downloads" />
     {:else if appState.currentScreen === 'settings'}
       <Settings />
     {:else if appState.currentScreen === 'details'}

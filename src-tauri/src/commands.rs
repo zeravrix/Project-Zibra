@@ -157,11 +157,16 @@ pub async fn fetch_source_page(
 pub async fn search_global(
     state: State<'_, AppState>,
     query: String,
+    pinned_ids: Option<Vec<String>>,
     nsfw_enabled: Option<bool>,
 ) -> Result<Vec<Manga>, String> {
     let settings = state.settings_store.load();
     let nsfw = nsfw_enabled.unwrap_or(settings.nsfw_enabled);
-    let pinned: HashSet<String> = settings.pinned_source_ids.into_iter().collect();
+    let pinned: HashSet<String> = if let Some(p) = pinned_ids {
+        p.into_iter().collect()
+    } else {
+        settings.pinned_source_ids.into_iter().collect()
+    };
 
     let results = state.registry.search_global(&query, &pinned, nsfw).await;
     Ok(results)

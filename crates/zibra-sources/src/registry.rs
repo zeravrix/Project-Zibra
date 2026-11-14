@@ -300,13 +300,21 @@ impl LiveSourceRegistry {
         if q.is_empty() {
             return Vec::new();
         }
-        let targets: Vec<Arc<dyn Source>> = self
-            .sources
-            .iter()
-            .filter(|s| (nsfw_enabled || !s.is_nsfw()) && (pinned_ids.contains(s.id()) || s.priority_rank() <= 12))
-            .take(16)
-            .cloned()
-            .collect();
+        let targets: Vec<Arc<dyn Source>> = if !pinned_ids.is_empty() {
+            self.sources
+                .iter()
+                .filter(|s| (nsfw_enabled || !s.is_nsfw()) && pinned_ids.contains(s.id()))
+                .take(24)
+                .cloned()
+                .collect()
+        } else {
+            self.sources
+                .iter()
+                .filter(|s| (nsfw_enabled || !s.is_nsfw()) && s.priority_rank() <= 12)
+                .take(16)
+                .cloned()
+                .collect()
+        };
 
         let mut handles = Vec::new();
         for src in targets {

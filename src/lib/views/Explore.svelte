@@ -9,7 +9,7 @@
   import { 
     Compass, Globe, Flame, Clock, ShieldAlert, 
     Search, ArrowLeft, Star, ExternalLink, RefreshCw,
-    BookOpen, Copy
+    BookOpen, Copy, X
   } from 'lucide-svelte';
 
   export let initialMode = 'pinned'; // 'pinned' | 'catalog' | 'browse'
@@ -37,6 +37,12 @@
   let showSourceMenu = false;
   let sourceMenuPos = { x: 0, y: 0 };
   let contextSource = null;
+
+  // Global manhwa search across pinned sources
+  let pinnedManhwaQuery = '';
+  let globalSearchResults = [];
+  let isGlobalSearching = false;
+  let globalSearchDone = false;
 
   const languages = ['ALL', 'en', 'ar', 'es', 'fr', 'id', 'ru', 'ja', 'ko', 'pt', 'tr', 'vi', 'de', 'it'];
 
@@ -71,6 +77,42 @@
       notify(`Pinned source to Explore`);
     }
     savePinnedIds();
+  }
+
+  async function handlePinnedSearchKeydown(e) {
+    if (e.key === 'Enter') {
+      runPinnedSearch();
+    }
+  }
+
+  async function runPinnedSearch() {
+    const q = pinnedManhwaQuery.trim();
+    if (!q) {
+      clearPinnedSearch();
+      return;
+    }
+    isGlobalSearching = true;
+    globalSearchDone = true;
+    try {
+      globalSearchResults = await invoke('search_global', {
+        query: q,
+        pinnedIds: pinnedSourceIds,
+        nsfwEnabled: appState.settings?.nsfw_enabled ?? false,
+      });
+    } catch (e) {
+      console.error('Global search error:', e);
+      notify('Search error: ' + e);
+      globalSearchResults = [];
+    } finally {
+      isGlobalSearching = false;
+    }
+  }
+
+  function clearPinnedSearch() {
+    pinnedManhwaQuery = '';
+    globalSearchResults = [];
+    isGlobalSearching = false;
+    globalSearchDone = false;
   }
 
   function handleSourceContextMenu(e, source) {
@@ -304,24 +346,72 @@
 <div class="explore-container" on:scroll={handleScroll} bind:this={scrollContainer}>
   <!-- VIEW 1: PINNED SOURCES (EXPLORE) -->
   {#if viewMode === 'pinned'}
-    <header class="view-header">
-      <div class="header-titles">
-        <h1 class="main-title">
-          <Compass size={28} class="brand-icon" />
-          <span>Explore Sources</span>
-        </h1>
-        <p class="subtitle">Quick access to your pinned manga & manhwa sources</p>
+    <header class="explore-hero-header">
+      <div class="header-top-row">
+        <div class="header-titles">
+          <h1 class="main-title">
+            <Compass size={24} class="brand-icon" />
+            <span>Explore</span>
+          </h1>
+          <p class="subtitle">Search & read from your {pinnedSources.length} pinned sources</p>
+        </div>
+
+        <!-- SMALL CATALOG BUTTON IN UPPER RIGHT -->
+        <button class="catalog-mini-btn" on:click={() => (viewMode = 'catalog')} title="Browse full 1,190+ sources catalog">
+          <Globe size={15} />
+          <span>Catalog</span>
+          <span class="catalog-badge">{allSources.length}</span>
+        </button>
       </div>
 
-      <div class="header-actions">
-        <button class="catalog-btn" on:click={() => (viewMode = 'catalog')}>
-          <Globe size={16} />
-          <span>All Sources ({allSources.length})</span>
-        </button>
+      <!-- MANHWA SEARCH BAR ACROSS PINNED SOURCES -->
+      <div class="explore-search-wrap">
+        <Search size={16} class="search-bar-icon" />
+        <input
+          type="text"
+          placeholder="Search manhwa across all {pinnedSources.length} pinned sources (Press Enter)..."
+          bind:value={pinnedManhwaQuery}
+          on:keydown={handlePinnedSearchKeydown}
+          class="explore-search-input"
+        />
+        {#if pinnedManhwaQuery}
+          <button class="clear-search-btn" on:click={clearPinnedSearch} title="Clear search">
+            <X size={15} />
+          </button>
+        {/if}
       </div>
     </header>
 
-    {#if pinnedSources.length === 0}
+    {#if isGlobalSearching}
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Searching "{pinnedManhwaQuery}" across your pinned sources...</p>
+      </div>
+    {:else if globalSearchDone}
+      <div class="search-results-section">
+        <div class="results-meta-header">
+          <span class="results-count-text">{globalSearchResults.length} titles found for "{pinnedManhwaQuery}"</span>
+          <button class="clear-results-link" on:click={clearPinnedSearch}>
+            <span>← Back to Pinned Sources</span>
+          </button>
+        </div>
+
+        {#if globalSearchResults.length === 0}
+          <EmptyState
+            title="No Titles Found"
+            description="No manhwa found matching '{pinnedManhwaQuery}' in your pinned sources."
+            actionLabel="Search Full 1,190+ Catalog"
+            onAction={() => { viewMode = 'catalog'; sourceCatalogSearch = pinnedManhwaQuery; }}
+          />
+        {:else}
+          <CoverGrid
+            mangas={globalSearchResults}
+            {favoritesSet}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        {/if}
+      </div>
+    {:else if pinnedSources.length === 0}
       <EmptyState
         title="No Pinned Sources Yet"
         description="Select and star your favorite sources from the full 1,190+ catalog to view them here."
@@ -611,6 +701,129 @@
     background: var(--z-bg);
   }
 
+  .explore-hero-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--z-space-4);
+    width: 100%;
+    margin-bottom: var(--z-space-6);
+  }
+
+  .header-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: var(--z-space-3);
+  }
+
+  .catalog-mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: var(--z-radius-full);
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+  }
+
+  .catalog-mini-btn:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: #3b82f6;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.25);
+  }
+
+  .catalog-badge {
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: var(--z-radius-full);
+  }
+
+  .explore-search-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    align-items: center;
+  }
+
+  :global(.search-bar-icon) {
+    position: absolute;
+    left: 14px;
+    color: var(--z-text-muted);
+    pointer-events: none;
+  }
+
+  .explore-search-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--z-radius-full);
+    padding: 10px 40px 10px 40px;
+    color: var(--z-text);
+    font-size: var(--z-text-sm);
+    outline: none;
+    transition: all 0.2s ease;
+  }
+
+  .explore-search-input:focus {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: #3b82f6;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.25);
+  }
+
+  .clear-search-btn {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--z-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .clear-search-btn:hover {
+    color: var(--z-text);
+  }
+
+  .results-meta-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0 16px;
+    border-bottom: 1px solid var(--z-border);
+    margin-bottom: var(--z-space-4);
+  }
+
+  .results-count-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--z-text);
+  }
+
+  .clear-results-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: #60a5fa;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
   .view-header {
     display: flex;
     align-items: center;
@@ -679,27 +892,6 @@
   .subtitle {
     font-size: var(--z-text-xs);
     color: var(--z-text-muted);
-  }
-
-  .catalog-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 18px;
-    background: var(--z-surface-raised);
-    border: 1px solid var(--z-border);
-    border-radius: var(--z-radius-full);
-    color: var(--z-text);
-    font-size: var(--z-text-xs);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .catalog-btn:hover {
-    background: var(--z-border-hover);
-    border-color: #3b82f6;
-    color: #60a5fa;
   }
 
   .search-wrap {

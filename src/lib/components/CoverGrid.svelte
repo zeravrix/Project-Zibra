@@ -36,7 +36,8 @@
 <style>
   .cover-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(145px, 185px));
+    justify-content: start;
     gap: var(--z-space-5);
     padding: var(--z-space-4) 0;
     width: 100%;
@@ -44,7 +45,7 @@
 
   @media (min-width: 1400px) {
     .cover-grid {
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(155px, 195px));
       gap: var(--z-space-6);
     }
   }
