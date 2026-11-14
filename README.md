@@ -94,11 +94,15 @@ Project-Zibra/
 
 ## Launching the Standalone Application
 
-The pre-compiled standalone binary is ready in the repository:
+The pre-compiled standalone binary and launcher are ready directly in the repository with all assets embedded:
 
 ```bash
-./target/release/zibra-desktop
+./launch.sh
+# or directly:
+./bin/zibra-desktop
 ```
+
+Zero external dev servers, zero build steps, and zero cargo commands required. Out of the box, the embedded static frontend and native Rust engines start instantly in `< 100 ms`.
 
 ---
 

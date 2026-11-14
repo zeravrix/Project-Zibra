@@ -7,9 +7,9 @@ Authoritative reference for design tokens, UI components, styling, and glassmorp
 ## 1. Token Definitions
 
 ### File Locations
-- **Active Rust Model**: [`crates/zibra-core/src/settings.rs`](file:///home/u1m/Documents/ZERAVRIX/ZIBRA-RS/crates/zibra-core/src/settings.rs)
-- **Active CSS Tokens**: [`src/app.css`](file:///home/u1m/Documents/ZERAVRIX/ZIBRA-RS/src/app.css)
-- **Global Svelte Stores**: [`src/lib/stores/app.svelte.js`](file:///home/u1m/Documents/ZERAVRIX/ZIBRA-RS/src/lib/stores/app.svelte.js)
+- **Active Rust Model**: `crates/zibra-core/src/settings.rs`
+- **Active CSS Tokens**: `src/app.css`
+- **Global Svelte Stores**: `src/lib/stores/app.svelte.js`
 
 ### Token Structure & Material Design Schemes
 The application uses 13 preset Material Design 3 palettes, switchable dynamically with AMOLED pure-black overrides:

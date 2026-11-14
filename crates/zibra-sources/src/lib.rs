@@ -1,5 +1,4 @@
 pub mod catalog;
-pub mod catalog_data;
 pub mod engines;
 pub mod extractor;
 pub mod registry;

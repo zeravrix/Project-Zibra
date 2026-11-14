@@ -294,11 +294,44 @@ pub async fn cancel_download(_state: State<'_, AppState>, _chapter_id: String) -
     Ok(())
 }
 
+pub fn save_source_cookies_inner(
+    state: &AppState,
+    source_id: &str,
+    cookie: &str,
+    base_url: Option<&str>,
+) -> Result<(), String> {
+    let mut settings = state.settings_store.load();
+    let trimmed_cookie = cookie.trim();
+    if trimmed_cookie.is_empty() {
+        settings.custom_source_cookies.remove(source_id);
+    } else {
+        settings.custom_source_cookies.insert(source_id.to_string(), trimmed_cookie.to_string());
+    }
+    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+
+    let target_url = base_url
+        .and_then(|u| u.parse::<url::Url>().ok())
+        .or_else(|| {
+            state.registry.get(source_id).and_then(|s| s.base_url().parse::<url::Url>().ok())
+        });
+
+    if let Some(parsed) = target_url {
+        for part in trimmed_cookie.split(';') {
+            let item = part.trim();
+            if !item.is_empty() {
+                state.cookie_jar.add_cookie_str(item, &parsed);
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn open_cloudflare_solver(
     app: tauri::AppHandle,
     url: String,
     title: Option<String>,
+    source_id: Option<String>,
 ) -> Result<(), String> {
     use tauri::Manager;
     let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
@@ -311,6 +344,51 @@ pub async fn open_cloudflare_solver(
     }
 
     let win_title = title.unwrap_or_else(|| "Cloudflare Verification — Zibrax".to_string());
+    let app_handle = app.clone();
+    let src_id = source_id.unwrap_or_else(|| {
+        parsed_url.host_str().unwrap_or("unknown").to_string()
+    });
+    let base_url_str = url.clone();
+
+    let init_script = r#"
+        (function() {
+            function initZibraOverlay() {
+                if (document.getElementById('zibra-solver-ui')) return;
+                const overlay = document.createElement('div');
+                overlay.id = 'zibra-solver-ui';
+                overlay.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(18,18,24,0.96);backdrop-filter:blur(12px);color:#f4f4f5;padding:12px 18px;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,0.7);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;display:flex;align-items:center;gap:12px;border:1px solid #7c3aed;';
+
+                const label = document.createElement('div');
+                label.innerHTML = '<span style="color:#c4b5fd;font-weight:700;display:block;">🛡️ Zibrax Cloudflare Pass</span><span style="color:#a1a1aa;font-size:11px;">Solve challenge, then click sync</span>';
+
+                const btn = document.createElement('button');
+                btn.innerText = 'Sync & Return';
+                btn.style.cssText = 'background:#7c3aed;color:#ffffff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;transition:background 0.2s;';
+                btn.onmouseover = () => { btn.style.background = '#6d28d9'; };
+                btn.onmouseout = () => { btn.style.background = '#7c3aed'; };
+                btn.onclick = () => {
+                    btn.innerText = 'Syncing...';
+                    const c = document.cookie || '';
+                    window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c);
+                };
+
+                overlay.appendChild(label);
+                overlay.appendChild(btn);
+                if (document.body) {
+                    document.body.appendChild(overlay);
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initZibraOverlay);
+            } else {
+                initZibraOverlay();
+            }
+            setTimeout(initZibraOverlay, 1500);
+            setTimeout(initZibraOverlay, 3500);
+        })();
+    "#;
+
     let _ = tauri::WebviewWindowBuilder::new(
         &app,
         "cloudflare-solver",
@@ -320,6 +398,31 @@ pub async fn open_cloudflare_solver(
     .inner_size(960.0, 720.0)
     .center()
     .resizable(true)
+    .initialization_script(init_script)
+    .on_navigation(move |nav_url| {
+        if nav_url.host_str() == Some("zibra.local") && nav_url.path() == "/sync-cf" {
+            let pairs: std::collections::HashMap<_, _> = nav_url.query_pairs().into_owned().collect();
+            let cookie_str = pairs.get("c").cloned().unwrap_or_default();
+            let app_h = app_handle.clone();
+            let s_id = src_id.clone();
+            let b_url = base_url_str.clone();
+
+            tauri::async_runtime::spawn(async move {
+                let state = app_h.state::<AppState>();
+                let _ = save_source_cookies_inner(&state, &s_id, &cookie_str, Some(&b_url));
+                if let Some(win) = app_h.get_webview_window("cloudflare-solver") {
+                    let _ = win.close();
+                }
+                use tauri::Emitter;
+                let _ = app_h.emit("cloudflare-solved", serde_json::json!({
+                    "source_id": s_id,
+                    "cookies": cookie_str,
+                }));
+            });
+            return false;
+        }
+        true
+    })
     .build()
     .map_err(|e| e.to_string())?;
 
@@ -333,16 +436,15 @@ pub async fn save_source_cookies(
     cookie: String,
     base_url: Option<String>,
 ) -> Result<(), String> {
-    let mut settings = state.settings_store.load();
-    settings.custom_source_cookies.insert(source_id, cookie.clone());
-    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+    save_source_cookies_inner(&state, &source_id, &cookie, base_url.as_deref())
+}
 
-    if let Some(u) = base_url {
-        if let Ok(parsed) = u.parse::<url::Url>() {
-            state.cookie_jar.add_cookie_str(&cookie, &parsed);
-        }
-    }
-    Ok(())
+#[tauri::command]
+pub async fn clear_source_cookies(
+    state: State<'_, AppState>,
+    source_id: String,
+) -> Result<(), String> {
+    save_source_cookies_inner(&state, &source_id, "", None)
 }
 
 #[tauri::command]
@@ -352,5 +454,71 @@ pub async fn get_source_cookies(
 ) -> Result<String, String> {
     let settings = state.settings_store.load();
     Ok(settings.custom_source_cookies.get(&source_id).cloned().unwrap_or_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_save_source_cookies_parsing_and_persistence() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibra_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let settings_store = std::sync::Arc::new(zibra_core::AppSettingsStore::new(&temp_dir));
+        let library = std::sync::Arc::new(zibra_core::LibraryStore::new(&temp_dir).unwrap());
+        let cookie_jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        let http_client = reqwest::Client::builder()
+            .cookie_provider(cookie_jar.clone())
+            .build()
+            .unwrap();
+        let registry = std::sync::Arc::new(zibra_sources::LiveSourceRegistry::new_with_client(http_client.clone()));
+        let downloader = std::sync::Arc::new(zibra_core::DesktopDownloader::new(&temp_dir, 2));
+        let reader_pipeline = std::sync::Arc::new(zibra_reader::ReaderPagePipeline::new(&temp_dir, 128));
+        let cover_cache = std::sync::Arc::new(zibra_reader::CoverImageCache::new(&temp_dir));
+
+        let state = AppState {
+            app_dir: temp_dir.clone(),
+            settings_store: settings_store.clone(),
+            library,
+            registry,
+            downloader,
+            reader_pipeline,
+            cover_cache,
+            http_client,
+            cookie_jar: cookie_jar.clone(),
+        };
+
+        let cookie_str = "cf_clearance=mock_cf_token_12345; __cf_bm=mock_bm_67890; csrftoken=abc";
+        let res = save_source_cookies_inner(&state, "MANGADEX", cookie_str, Some("https://api.mangadex.org"));
+        assert!(res.is_ok());
+
+        // Check settings persisted
+        let loaded = settings_store.load();
+        assert_eq!(loaded.custom_source_cookies.get("MANGADEX").unwrap(), cookie_str);
+
+        // Check cookie jar holds the cookies
+        use reqwest::cookie::CookieStore;
+        let url = "https://api.mangadex.org/manga".parse::<url::Url>().unwrap();
+        let header = cookie_jar.cookies(&url).unwrap();
+        let header_str = header.to_str().unwrap();
+        assert!(header_str.contains("cf_clearance=mock_cf_token_12345"));
+        assert!(header_str.contains("__cf_bm=mock_bm_67890"));
+        assert!(header_str.contains("csrftoken=abc"));
+
+        // Clear cookies
+        let clear_res = save_source_cookies_inner(&state, "MANGADEX", "", None);
+        assert!(clear_res.is_ok());
+        let after_clear = settings_store.load();
+        assert!(!after_clear.custom_source_cookies.contains_key("MANGADEX"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
 

@@ -32,6 +32,7 @@ pub fn run() {
             commands::cancel_download,
             commands::open_cloudflare_solver,
             commands::save_source_cookies,
+            commands::clear_source_cookies,
             commands::get_source_cookies,
         ])
         .run(tauri::generate_context!())

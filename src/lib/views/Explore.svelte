@@ -1,21 +1,60 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import CoverGrid from '../components/CoverGrid.svelte';
   import SearchBar from '../components/SearchBar.svelte';
   import { appState, notify } from '../stores/app.svelte.js';
-  import { Compass, Globe, Sparkles, Flame, Clock, Filter, ShieldAlert } from 'lucide-svelte';
+  import { Compass, Globe, Sparkles, Flame, Clock, Filter, ShieldAlert, Check, X } from 'lucide-svelte';
+
+  let showCookieModal = false;
+  let cookieInput = '';
+  let unlistenCf = null;
 
   async function handleSolveCloudflare() {
     if (!selectedSource) return;
     try {
+      cookieInput = await invoke('get_source_cookies', { sourceId: selectedSource.id });
+    } catch (_) {
+      cookieInput = '';
+    }
+    showCookieModal = true;
+    try {
       await invoke('open_cloudflare_solver', {
         url: selectedSource.base_url,
         title: `${selectedSource.name} — Cloudflare Verification`,
+        sourceId: selectedSource.id,
       });
       notify(`Opening Cloudflare solver for ${selectedSource.name}...`);
     } catch (e) {
-      notify('Failed to open solver: ' + e);
+      notify('Solver error: ' + e);
+    }
+  }
+
+  async function handleSaveCookies() {
+    if (!selectedSource) return;
+    try {
+      await invoke('save_source_cookies', {
+        sourceId: selectedSource.id,
+        cookie: cookieInput,
+        baseUrl: selectedSource.base_url,
+      });
+      notify(`Saved custom cookies for ${selectedSource.name}`);
+      showCookieModal = false;
+      loadMangas(1, false);
+    } catch (e) {
+      notify('Error saving cookies: ' + e);
+    }
+  }
+
+  async function handleClearCookies() {
+    if (!selectedSource) return;
+    try {
+      await invoke('clear_source_cookies', { sourceId: selectedSource.id });
+      cookieInput = '';
+      notify(`Cleared cookies for ${selectedSource.name}`);
+    } catch (e) {
+      notify('Error clearing cookies: ' + e);
     }
   }
 
@@ -144,6 +183,22 @@
     if (selectedSource) {
       loadMangas(1, false);
     }
+
+    try {
+      unlistenCf = await listen('cloudflare-solved', (event) => {
+        if (event.payload?.source_id === selectedSource?.id) {
+          notify(`Cloudflare verification passed for ${selectedSource.name}! Refreshing...`);
+          showCookieModal = false;
+          loadMangas(1, false);
+        }
+      });
+    } catch (e) {
+      console.warn('Could not register cloudflare listener', e);
+    }
+  });
+
+  onDestroy(() => {
+    if (unlistenCf) unlistenCf();
   });
 </script>
 
@@ -265,6 +320,41 @@
       {/if}
     {/if}
   </div>
+
+  {#if showCookieModal}
+    <div class="modal-backdrop" on:click|self={() => (showCookieModal = false)}>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <ShieldAlert size={20} class="modal-icon" />
+            <h3>Cloudflare Solver: {selectedSource?.name}</h3>
+          </div>
+          <button class="close-icon-btn" on:click={() => (showCookieModal = false)}>
+            <X size={18} />
+          </button>
+        </div>
+        <p class="modal-desc">
+          An in-app solver window has opened for <strong>{selectedSource?.name}</strong>. Complete the CAPTCHA or Turnstile check in that window and click <em>"Sync & Return"</em>.
+        </p>
+        <div class="manual-cookie-section">
+          <label for="exp-cookie-box" class="cookie-label">Or paste cookies manually (cf_clearance):</label>
+          <textarea
+            id="exp-cookie-box"
+            class="cookie-textarea"
+            placeholder="cf_clearance=...; __cf_bm=...;"
+            bind:value={cookieInput}
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="modal-btn secondary" on:click={handleClearCookies}>Clear</button>
+          <button class="modal-btn primary" on:click={handleSaveCookies}>
+            <Check size={16} /> Save & Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -495,5 +585,144 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--z-space-4);
+  }
+
+  .modal-card {
+    background: var(--z-surface);
+    border: 1px solid var(--z-border);
+    border-radius: var(--z-radius-lg);
+    width: 100%;
+    max-width: 520px;
+    padding: var(--z-space-6);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--z-space-4);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-3);
+  }
+
+  .modal-title-group h3 {
+    margin: 0;
+    font-size: var(--z-text-lg);
+    color: var(--z-text);
+  }
+
+  :global(.modal-icon) {
+    color: var(--z-accent);
+  }
+
+  .close-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--z-text-muted);
+    cursor: pointer;
+    padding: var(--z-space-1);
+    border-radius: var(--z-radius-sm);
+  }
+
+  .close-icon-btn:hover {
+    color: var(--z-text);
+    background: var(--z-surface-variant);
+  }
+
+  .modal-desc {
+    font-size: var(--z-text-sm);
+    color: var(--z-text-muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .manual-cookie-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--z-space-2);
+  }
+
+  .cookie-label {
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    color: var(--z-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .cookie-textarea {
+    width: 100%;
+    background: var(--z-bg);
+    border: 1px solid var(--z-border);
+    border-radius: var(--z-radius-md);
+    padding: var(--z-space-3);
+    color: var(--z-text);
+    font-family: monospace;
+    font-size: var(--z-text-xs);
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .cookie-textarea:focus {
+    outline: none;
+    border-color: var(--z-accent);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--z-space-3);
+    margin-top: var(--z-space-2);
+  }
+
+  .modal-btn {
+    padding: var(--z-space-2) var(--z-space-4);
+    border-radius: var(--z-radius-md);
+    font-size: var(--z-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-2);
+    border: none;
+    transition: all 0.2s ease;
+  }
+
+  .modal-btn.primary {
+    background: var(--z-accent);
+    color: #ffffff;
+  }
+
+  .modal-btn.primary:hover {
+    filter: brightness(1.1);
+  }
+
+  .modal-btn.secondary {
+    background: var(--z-surface-variant);
+    color: var(--z-text);
+    border: 1px solid var(--z-border);
+  }
+
+  .modal-btn.secondary:hover {
+    background: var(--z-border);
   }
 </style>
