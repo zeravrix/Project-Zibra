@@ -101,12 +101,16 @@ impl LibraryStore {
             conn: Arc::new(Mutex::new(conn)),
         };
 
-        let _ = store.import_legacy_properties(root);
-        if let Some(home) = dirs::home_dir() {
-            let legacy_zeravrix = home.join(".zeravrix");
-            if legacy_zeravrix.is_dir() && legacy_zeravrix != root {
-                let _ = store.import_legacy_properties(&legacy_zeravrix);
+        let marker = root.join(".legacy_imported");
+        if !marker.exists() {
+            let _ = store.import_legacy_properties(root);
+            if let Some(home) = dirs::home_dir() {
+                let legacy_zeravrix = home.join(".zeravrix");
+                if legacy_zeravrix.is_dir() && legacy_zeravrix != root {
+                    let _ = store.import_legacy_properties(&legacy_zeravrix);
+                }
             }
+            let _ = fs::write(&marker, b"1");
         }
         Ok(store)
     }
@@ -208,13 +212,47 @@ impl LibraryStore {
     pub fn remove_favorite(&self, manga_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM library_manga WHERE id = ?1", params![manga_id])?;
+        drop(conn);
+        self.cleanup_legacy_file("library", manga_id);
         Ok(())
     }
 
     pub fn remove_history(&self, manga_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM history_manga WHERE id = ?1", params![manga_id])?;
+        conn.execute("DELETE FROM reading_progress WHERE manga_id = ?1", params![manga_id])?;
+        conn.execute("DELETE FROM chapter_progress WHERE manga_id = ?1", params![manga_id])?;
+        conn.execute("DELETE FROM cached_chapters WHERE manga_id = ?1", params![manga_id])?;
+        drop(conn);
+        self.cleanup_legacy_file("history", manga_id);
         Ok(())
+    }
+
+    fn cleanup_legacy_file(&self, sub: &str, manga_id: &str) {
+        let mut target_dirs = vec![self.root.join(sub)];
+        if let Some(home) = dirs::home_dir() {
+            target_dirs.push(home.join(".zeravrix").join(sub));
+            target_dirs.push(home.join(".zeravrix").join("progress"));
+        }
+        for dir in target_dirs {
+            if !dir.is_dir() {
+                continue;
+            }
+            if let Ok(entries) = fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("properties") {
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            if content.contains(manga_id)
+                                || path.file_stem().and_then(|s| s.to_str()) == Some(manga_id)
+                            {
+                                let _ = fs::remove_file(&path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn set_manga_status(&self, manga_id: &str, status: &str) -> anyhow::Result<()> {

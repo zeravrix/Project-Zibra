@@ -33,7 +33,7 @@
   let favoritesSet = new Set();
   let unlistenCf = null;
   let scrollContainer;
-  let catalogDisplayLimit = 60;
+  let catalogDisplayLimit = 32;
   let showSourceMenu = false;
   let sourceMenuPos = { x: 0, y: 0 };
   let contextSource = null;
@@ -185,7 +185,7 @@
   }
 
   $: if (sourceCatalogSearch || selectedLang) {
-    catalogDisplayLimit = 60;
+    catalogDisplayLimit = 32;
   }
 
   async function loadSources(force = false) {
@@ -451,7 +451,7 @@
             <div class="card-top">
               <div class="source-icon-wrap">
                 {#if source.icon_url}
-                  <img src={source.icon_url} alt="" class="source-favicon" on:error={(e) => e.target.style.display = 'none'} />
+                  <img src={source.icon_url} alt="" class="source-favicon" loading="lazy" decoding="async" on:error={(e) => e.target.style.display = 'none'} />
                 {:else}
                   <Globe size={24} class="source-fallback-icon" />
                 {/if}
@@ -540,7 +540,7 @@
             <div class="card-top">
               <div class="source-icon-wrap">
                 {#if source.icon_url}
-                  <img src={source.icon_url} alt="" class="source-favicon" on:error={(e) => e.target.style.display = 'none'} />
+                  <img src={source.icon_url} alt="" class="source-favicon" loading="lazy" decoding="async" on:error={(e) => e.target.style.display = 'none'} />
                 {:else}
                   <Globe size={24} class="source-fallback-icon" />
                 {/if}
@@ -570,7 +570,7 @@
         <div class="load-more-manual-wrap">
           <button
             class="load-more-btn"
-            on:click={() => (catalogDisplayLimit = Math.min(filteredCatalogSources.length, catalogDisplayLimit + 60))}
+            on:click={() => (catalogDisplayLimit = Math.min(filteredCatalogSources.length, catalogDisplayLimit + 32))}
           >
             <span>Load More Sources (Showing {catalogDisplayLimit} of {filteredCatalogSources.length})</span>
           </button>
@@ -663,7 +663,7 @@
               <span>Retry</span>
             </button>
           </div>
-          <span class="cf-note">Opens a compact browser popup just like Kotatsu. Cookies sync automatically when solved.</span>
+          <span class="cf-note">Opens a lightweight browser window. Cookies sync automatically when solved.</span>
         </div>
 
       {:else if mangaList.length === 0}

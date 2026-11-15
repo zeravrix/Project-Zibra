@@ -4,13 +4,13 @@
 
 # Zibrax (Project Zibra)
 
-**Production-Grade Native Manga, Manhwa & Webtoon Desktop Application for Linux & Windows**
+**High-Performance Native Manga, Manhwa & Comic Reader for Linux & Windows**
 
 [![Official Website](https://img.shields.io/badge/Website-zeravrix.pages.dev-7C4DFF?style=for-the-badge&logo=googlechrome&logoColor=white)](https://zeravrix.pages.dev)
 [![Release](https://img.shields.io/badge/Release-v2.1.0-00E676?style=for-the-badge)](https://github.com/zeravrix/Project-Zibra/releases)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-00B0FF?style=for-the-badge&logo=linux&logoColor=white)](#repository-structure)
-[![Language](https://img.shields.io/badge/Language-Rust%20%2B%20Svelte%205-DEA584?style=for-the-badge&logo=rust&logoColor=black)](https://www.rust-lang.org/)
-[![UI Framework](https://img.shields.io/badge/Architecture-Tauri%20v2%20%2B%20WebKitGTK-FF6D00?style=for-the-badge)](#architecture)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-00B0FF?style=for-the-badge&logo=linux&logoColor=white)](#downloads--installation)
+[![Backend](https://img.shields.io/badge/Backend-Rust%20Engine-DEA584?style=for-the-badge&logo=rust&logoColor=black)](https://www.rust-lang.org/)
+[![Frontend](https://img.shields.io/badge/Frontend-Tauri%20v2%20%2B%20Svelte%205-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 
 </div>
@@ -19,41 +19,113 @@
 
 ## Overview
 
-**Zibrax** is an ultra-fast, modern desktop reader engineered for comic, manga, manhwa, and webtoon enthusiasts. Built with a high-performance **100% pure Rust** backend and a responsive **Tauri v2 + Svelte 5** glassmorphic interface, Zibrax delivers instant startup (`< 100 ms`), ultra-low memory usage, and zero reliance on external JVM or runtime servers.
+**Zibrax** is an ultra-fast, modern native desktop reader engineered for comic, manga, manhwa, and webtoon enthusiasts. Architected with a multi-threaded **Rust core engine** and a sleek **Tauri v2 + Svelte 5** interface, Zibrax delivers instant startup (`< 100 ms`), minimal memory consumption, smooth hardware acceleration, and zero reliance on external JVM or runtime servers.
 
-Frontend assets are bundled directly into the standalone binary via custom in-memory protocols, allowing the application to run out of the box with zero external dependencies.
-
----
-
-## Key Highlights
-
-- **1,250+ High-Speed Pure Rust Sources**:
-  - Global catalog covering **18 languages** (`AR`, `EN`, `MULTI`, `JA`, `KO`, `ZH`, `FR`, `ES`, `PT`, `ID`, `TR`, `RU`, `VI`, `DE`, `IT`, `PL`, `TH`).
-  - Native scrapers for **MangaDex API v5**, **MangaSwat**, **Azora**, **Team-X**, **Dilar**, **Asura Scans**, **Flame Comics**, **Toonily**, **HariManga**, **Komga / Kavita personal servers**, and **Local `.cbz` / archive directories**.
-  - Built-in **NSFW Content Isolation Filter** (enabled by default) to filter adult sources across catalog views and search results.
-- **In-App Cloudflare CAPTCHA Verification**:
-  - Direct in-app Webview solver window allowing users to seamlessly view and manually pass Cloudflare Turnstile and DDoS-GUARD challenges.
-  - Automatic session cookie sync back to the native HTTP client for uninterrupted reading.
-- **Glassmorphic Material Design UI**:
-  - Svelte 5 reactive component hierarchy with glassmorphic accents, fluid navigation rail, and dynamic theme switching (including AMOLED pitch black and high contrast modes).
-  - Multi-tab Explore view with real-time ping latency indicators, quick filtering, and continuous search.
-  - Interactive details view with synopsis, genre pills, chapter list, and instant bookmarking.
-- **Continuous Infinite Webtoon & Paged Reader**:
-  - Continuous vertical reading with seamless multi-chapter preloading.
-  - Automatic `2048px` GPU tile slicing to prevent texture memory exhaustion on integrated graphics chips.
-  - Real-time image adjustments: zoom, brightness, contrast, color inversion, and page gap trimming.
-- **Resilient Offline Architecture**:
-  - SQLite WAL (Write-Ahead Logging) for atomic state persistence: library, reading progress, and history.
-  - Parallel `.cbz` archiver for complete offline chapter reading.
+The application compiles down to a compact standalone native executable with embedded UI assets, running seamlessly out of the box on Linux and Windows.
 
 ---
 
 ## Screenshots
 
-<p align="center">
-  <img src="docs/assets/screenshot-library.png" alt="Zibrax Library View" width="48%" />
-  <img src="docs/assets/screenshot-reader.png" alt="Zibrax Reader View" width="48%" />
-</p>
+<div align="center">
+
+### Library & History
+<img src="docs/assets/screenshot-library.png" alt="Zibrax Library View" width="95%" />
+
+<br/><br/>
+
+### Pinned Sources & Global Discovery
+<img src="docs/assets/screenshot-explore.png" alt="Zibrax Explore View" width="48%" />
+<img src="docs/assets/screenshot-catalog.png" alt="Zibrax Catalog View" width="48%" />
+
+<br/><br/>
+
+### Reading Experience & Real-Time Adjustments
+<img src="docs/assets/screenshot-reader.png" alt="Zibrax Reader View" width="48%" />
+<img src="docs/assets/screenshot-reader-settings.png" alt="Zibrax Reader Settings" width="48%" />
+
+<br/><br/>
+
+### Feed & Application Preferences
+<img src="docs/assets/screenshot-feed.png" alt="Zibrax Feed View" width="48%" />
+<img src="docs/assets/screenshot-settings.png" alt="Zibrax Settings View" width="48%" />
+
+</div>
+
+---
+
+## Key Features
+
+- **Extensive Multi-Source Catalog**:
+  - Access hundreds of working manga, manhwa, and comic sources across multiple languages.
+  - Native scrapers for **MangaDex API v5**, **MangaSwat**, **Azora**, **Team-X**, **Dilar**, **Asura Scans**, **Flame Comics**, **Toonily**, personal servers (**Komga / Kavita**), and local archive directories (`.cbz`).
+  - Automatic bidirectional archive fallback (Latest ↔ Popular) to ensure maximum title availability.
+  - Built-in **NSFW Filter** (configurable in Settings) to safeguard catalog views and search results.
+
+- **In-App Cloudflare Verification**:
+  - Integrated lightweight browser window enabling users to pass Cloudflare Turnstile and DDoS-GUARD challenges.
+  - Automatic session cookie sync back to the native HTTP client for continuous reading without external browser workarounds.
+
+- **Fast, Modern UI**:
+  - Reactive Svelte 5 component hierarchy with smooth transitions, custom accent color palettes, and AMOLED dark themes.
+  - Quick library filtering by reading status ("Reading", "Completed") and persistent reading progress tracking across restarts.
+  - Compact Feed view displaying the newest chapter releases with direct read links.
+
+- **Continuous Webtoon & Dual-Page Reader**:
+  - Continuous vertical reading with intelligent multi-chapter preloading.
+  - Dynamic viewport auto-scaling for single-page and 2-page spreads without clipping or aspect ratio distortion.
+  - Real-time display adjustments: fit modes, background themes, page gap trimming, and color inversion.
+
+- **Offline Architecture & Storage**:
+  - SQLite WAL (Write-Ahead Logging) storage with indexed lookups for reading progress, bookmarks, and history.
+  - Built-in parallel download manager and `.cbz` archiver for complete offline access.
+
+---
+
+## Downloads & Installation
+
+### Linux (Standalone Native Binary)
+
+Download the latest Linux release package from [GitHub Releases](https://github.com/zeravrix/Project-Zibra/releases):
+
+```bash
+# Clone or download release archive
+tar -xzf zibra-linux-x86_64.tar.gz
+cd zibra-linux-x86_64
+
+# Run directly
+./zibra-desktop
+```
+
+### Windows (Setup & Standalone)
+
+Download the Windows installer (`.exe` / `.msi`) or portable zip from [GitHub Releases](https://github.com/zeravrix/Project-Zibra/releases), extract, and launch `zibra.exe`.
+
+---
+
+## Building from Source
+
+### Prerequisites
+- [Rust toolchain](https://rustup.rs/) (1.80+)
+- [Node.js](https://nodejs.org/) (v18+) & `npm`
+- Linux dependencies: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libsoup-3.0-dev`
+
+### Build Steps
+```bash
+# 1. Clone repository
+git clone https://github.com/zeravrix/Project-Zibra.git
+cd Project-Zibra
+
+# 2. Build frontend assets
+npm install
+npm run build
+
+# 3. Compile native release binary
+cargo build --release -p zibra-desktop
+
+# 4. Binary output
+./target/release/zibra-desktop
+```
 
 ---
 
@@ -62,47 +134,33 @@ Frontend assets are bundled directly into the standalone binary via custom in-me
 ```text
 Project-Zibra/
 ├── Cargo.toml                     # Root workspace manifest
-├── Cargo.lock                     # Locked deterministic dependencies
+├── Cargo.lock                     # Deterministic dependency lockfile
 ├── index.html                     # Frontend entry point
 ├── package.json                   # Svelte 5 & Vite configuration
 ├── vite.config.js                 # Frontend build bundler configuration
-├── dist/                          # Pre-built bundled webview assets
+├── dist/                          # Bundled webview assets
 ├── assets/                        # Icons, logos & branding materials
+├── docs/assets/                   # High-resolution application screenshots
 ├── crates/
 │   ├── zibra-core/                # SQLite WAL storage, models, settings & parallel downloader
-│   ├── zibra-sources/             # 1,250+ pure Rust source catalog & multi-engine scrapers
-│   └── zibra-reader/              # 2048px GPU strip slicer & LRU tile memory cache
-├── src/                           # Svelte 5 glassmorphic UI components & state stores
+│   ├── zibra-sources/             # Pure Rust source catalog & multi-engine scrapers
+│   └── zibra-reader/              # GPU image strip slicer & LRU tile memory cache
+├── src/                           # Svelte 5 UI components & state stores
 │   ├── lib/
-│   │   ├── components/            # CoverCard, CoverGrid, NavRail, SearchBar
+│   │   ├── components/            # CoverCard, CoverGrid, NavRail, SearchBar, ContextMenu
 │   │   ├── stores/                # Reactive application state stores
-│   │   └── views/                 # Library, Explore, Details, Reader, Settings
-│   ├── app.css                    # Design system tokens, glassmorphism & typography
+│   │   └── views/                 # Library, Explore, Details, Reader, Settings, About
+│   ├── app.css                    # Design system tokens & typography
 │   └── main.js                    # UI bootstrap
 ├── src-tauri/                     # Tauri v2 native bridge & WebKitGTK host
 │   ├── Cargo.toml                 # Desktop package configuration
 │   ├── tauri.conf.json            # Tauri runtime configuration & window specifications
-│   ├── capabilities/              # Security capabilities & window permissions
 │   └── src/
 │       ├── commands.rs            # Native IPC invocations & Cloudflare solver
 │       ├── state.rs               # Thread-safe global application state
 │       └── lib.rs                 # Tauri application builder & entry
 └── distribution/                  # Packaging specs, desktop entries & launchers
 ```
-
----
-
-## Launching the Standalone Application
-
-The pre-compiled standalone binary and launcher are ready directly in the repository with all assets embedded:
-
-```bash
-./launch.sh
-# or directly:
-./bin/zibra-desktop
-```
-
-Zero external dev servers, zero build steps, and zero cargo commands required. Out of the box, the embedded static frontend and native Rust engines start instantly in `< 100 ms`.
 
 ---
 
