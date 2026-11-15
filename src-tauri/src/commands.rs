@@ -61,6 +61,11 @@ pub async fn remove_history(state: State<'_, AppState>, manga_id: String) -> Res
 }
 
 #[tauri::command]
+pub async fn set_manga_status(state: State<'_, AppState>, manga_id: String, status: String) -> Result<(), String> {
+    state.library.set_manga_status(&manga_id, &status).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn record_history(state: State<'_, AppState>, manga: Manga) -> Result<(), String> {
     state.library.record_history(&manga);
     Ok(())
@@ -184,6 +189,20 @@ pub async fn get_manga_details(
         .ok_or_else(|| format!("Source '{}' not found", source_id))?;
 
     let mut details = src.details(&manga).await.map_err(|e| e.to_string())?;
+    // Preserve original cover if details returns empty or a generic site logo/icon
+    if let Some(ref orig_cov) = manga.cover_url {
+        if !orig_cov.is_empty() {
+            let is_valid_new_cover = details.cover_url.as_ref().map_or(false, |c| {
+                !c.is_empty() 
+                    && !c.to_lowercase().contains("logo") 
+                    && !c.to_lowercase().contains("favicon")
+                    && !c.to_lowercase().contains("header")
+            });
+            if !is_valid_new_cover {
+                details.cover_url = Some(orig_cov.clone());
+            }
+        }
+    }
     details.enrich_manhwa_tags();
     Ok(details)
 }

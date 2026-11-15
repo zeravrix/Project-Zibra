@@ -52,9 +52,13 @@
         preloadUpcomingPages(0);
 
         try {
-          const prog = await invoke('get_reading_progress', { mangaId: manga.id });
-          if (prog && prog.chapter_id === chapter.id && prog.page_index < pages.length) {
-            currentPageIndex = prog.page_index;
+          if (appState.initialPageIndex && appState.initialPageIndex < pages.length) {
+            currentPageIndex = appState.initialPageIndex;
+          } else {
+            const prog = await invoke('get_reading_progress', { mangaId: manga.id });
+            if (prog && prog.chapter_id === chapter.id && prog.page_index < pages.length) {
+              currentPageIndex = prog.page_index;
+            }
           }
         } catch (_) {}
       }
@@ -927,14 +931,19 @@
     justify-content: center;
     height: 100vh;
     width: 100vw;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0;
   }
 
   .double-page-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 98vh;
+    height: 100vh;
+    max-width: 100vw;
     gap: 4px;
+    box-sizing: border-box;
   }
 
   .double-page-row.single-cover {
@@ -942,10 +951,13 @@
   }
 
   .reader-spread-img {
-    max-height: 96vh;
-    max-width: 48vw;
+    height: 100vh;
+    max-height: 100vh;
+    max-width: calc(50vw - 4px);
+    width: auto;
     object-fit: contain;
     user-select: none;
+    display: block;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
 
@@ -956,13 +968,19 @@
     justify-content: center;
     height: 100vh;
     width: 100vw;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0;
   }
 
   .reader-single-img {
-    max-height: 98vh;
-    max-width: 98vw;
+    height: 100vh;
+    max-height: 100vh;
+    width: auto;
+    max-width: 100vw;
     object-fit: contain;
     user-select: none;
+    display: block;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
 

@@ -69,9 +69,12 @@
   .main-content {
     flex: 1;
     height: 100vh;
+    min-width: 0;
+    width: 100%;
     overflow: hidden;
     display: flex;
     position: relative;
+    background: var(--z-bg);
   }
 
   .toast-notification {

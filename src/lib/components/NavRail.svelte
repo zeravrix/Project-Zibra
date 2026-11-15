@@ -1,6 +1,6 @@
 <script>
   import { 
-    History, Heart, Compass, Rss, Download, Settings, Info
+    History, Heart, Compass, Rss, Download, Settings
   } from 'lucide-svelte';
   import { appState, navigate } from '../stores/app.svelte.js';
 
@@ -84,20 +84,6 @@
         <span class="label">Settings</span>
       {/if}
     </button>
-
-    <button
-      class="rail-item"
-      class:active={appState.currentScreen === 'about'}
-      on:click={() => navigate('about')}
-      title={!appState.railExpanded ? "About Zibrax" : undefined}
-    >
-      <div class="icon-wrap">
-        <Info size={20} strokeWidth={1.8} />
-      </div>
-      {#if appState.railExpanded}
-        <span class="label">About</span>
-      {/if}
-    </button>
   </div>
 </nav>
 
@@ -111,7 +97,7 @@
     flex-direction: column;
     justify-content: space-between;
     padding: var(--z-space-3) var(--z-space-2);
-    transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    contain: paint;
     z-index: 50;
     flex-shrink: 0;
     user-select: none;

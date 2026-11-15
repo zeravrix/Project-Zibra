@@ -88,7 +88,12 @@ impl LibraryStore {
                  url TEXT,
                  is_locked INTEGER NOT NULL DEFAULT 0,
                  PRIMARY KEY (manga_id, chapter_id)
-             );",
+             );
+
+             CREATE INDEX IF NOT EXISTS idx_history_last_accessed ON history_manga(last_accessed DESC);
+             CREATE INDEX IF NOT EXISTS idx_library_added_at ON library_manga(added_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_reading_progress_manga ON reading_progress(manga_id);
+             CREATE INDEX IF NOT EXISTS idx_chapter_progress_manga ON chapter_progress(manga_id);",
         )?;
 
         let store = Self {
@@ -212,6 +217,19 @@ impl LibraryStore {
         Ok(())
     }
 
+    pub fn set_manga_status(&self, manga_id: &str, status: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock();
+        let _ = conn.execute(
+            "UPDATE library_manga SET status = ?1 WHERE id = ?2",
+            params![status, manga_id],
+        );
+        let _ = conn.execute(
+            "UPDATE history_manga SET status = ?1 WHERE id = ?2",
+            params![status, manga_id],
+        );
+        Ok(())
+    }
+
     pub fn toggle_favorite(&self, manga: &Manga) -> bool {
         if self.is_favorite(&manga.id) {
             let _ = self.remove_favorite(&manga.id);
@@ -231,7 +249,14 @@ impl LibraryStore {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(id) DO UPDATE SET
                  title = excluded.title,
-                 cover_url = COALESCE(excluded.cover_url, history_manga.cover_url),
+                 cover_url = CASE 
+                     WHEN excluded.cover_url IS NOT NULL 
+                          AND excluded.cover_url != '' 
+                          AND excluded.cover_url NOT LIKE '%logo%' 
+                          AND excluded.cover_url NOT LIKE '%favicon%' 
+                     THEN excluded.cover_url 
+                     ELSE COALESCE(history_manga.cover_url, excluded.cover_url)
+                 END,
                  description = CASE WHEN excluded.description != '' THEN excluded.description ELSE history_manga.description END,
                  author = COALESCE(excluded.author, history_manga.author),
                  status = COALESCE(excluded.status, history_manga.status),

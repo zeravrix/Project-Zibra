@@ -1,5 +1,5 @@
 <script>
-  import { BookOpen, Heart, Copy, Trash2 } from 'lucide-svelte';
+  import { BookOpen, Heart, Copy, Trash2, CheckCircle, Clock } from 'lucide-svelte';
   import ContextMenu from './ContextMenu.svelte';
   import { openManga, notify } from '../stores/app.svelte.js';
 
@@ -8,6 +8,7 @@
   export let isFavorite = false;
   export let onToggleFavorite = null;
   export let onDelete = null;
+  export let onSetStatus = null;
 
   let loaded = false;
   let error = false;
@@ -30,12 +31,20 @@
     showMenu = true;
   }
 
+  $: isCompleted = manga.status === 'COMPLETED' || progress >= 0.99;
   $: menuItems = [
     {
       label: isFavorite ? "Remove from Favourites" : "Add to Favourites",
       icon: Heart,
       action: () => onToggleFavorite?.(manga),
     },
+    ...(onSetStatus ? [
+      {
+        label: isCompleted ? "Mark as Reading" : "Mark as Completed",
+        icon: isCompleted ? Clock : CheckCircle,
+        action: () => onSetStatus(isCompleted ? 'READING' : 'COMPLETED'),
+      }
+    ] : []),
     {
       label: "Open Details",
       icon: BookOpen,

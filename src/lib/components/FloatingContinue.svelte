@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { openManga } from '../stores/app.svelte.js';
+  import { openReader, openManga } from '../stores/app.svelte.js';
   import { Play, BookOpen } from 'lucide-svelte';
 
   let recentManga = null;
@@ -21,10 +21,22 @@
     } catch (_) {}
   }
 
-  function handleContinue() {
-    if (recentManga) {
-      openManga(recentManga);
+  async function handleContinue() {
+    if (!recentManga) return;
+    if (recentProgress && recentProgress.chapter_id) {
+      try {
+        const chapters = await invoke('get_chapters', {
+          sourceId: recentManga.source_id,
+          manga: recentManga,
+        });
+        if (chapters && chapters.length > 0) {
+          const targetChapter = chapters.find(c => c.id === recentProgress.chapter_id) || chapters[0];
+          openReader(recentManga, targetChapter, recentProgress.page_index || 0);
+          return;
+        }
+      } catch (_) {}
     }
+    openManga(recentManga);
   }
 
   onMount(() => {
@@ -69,10 +81,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(18, 18, 26, 0.88);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(28, 26, 38, 0.96);
+    border: 1px solid rgba(59, 130, 246, 0.4);
     border-radius: 14px;
     padding: 8px 12px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.15);

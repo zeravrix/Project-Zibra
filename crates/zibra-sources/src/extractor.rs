@@ -284,6 +284,13 @@ pub async fn fetch_html_resilient(
                     }
                 }
             }
+            if status.as_u16() == 403 {
+                anyhow::bail!("Cloudflare / Bot Challenge (HTTP 403). Use the light browser solver to sync cookies.");
+            } else if status.as_u16() == 404 {
+                anyhow::bail!("HTTP 404 Not Found (Endpoint does not exist on this source)");
+            } else if status.as_u16() == 503 {
+                anyhow::bail!("HTTP 503 Service Unavailable (Source server down or under heavy load)");
+            }
             anyhow::bail!("HTTP {}", status);
         }
         Err(e) => Err(e.into()),

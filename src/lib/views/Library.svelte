@@ -3,12 +3,14 @@
   import { invoke } from '@tauri-apps/api/core';
   import CoverGrid from '../components/CoverGrid.svelte';
   import SearchBar from '../components/SearchBar.svelte';
-  import { appState, notify } from '../stores/app.svelte.js';
-  import { Heart, History, Trash2, Rss, Download } from 'lucide-svelte';
+  import EmptyState from '../components/EmptyState.svelte';
+  import { appState, notify, openReader, navigate } from '../stores/app.svelte.js';
+  import { Heart, History, Trash2, Rss, Download, BookOpen } from 'lucide-svelte';
 
   export let mode = 'history'; // 'history' | 'favorites' | 'feed' | 'downloads'
 
   let mangas = [];
+  let feedItems = [];
   let loading = true;
   let searchQuery = '';
   let activeFilter = 'ALL'; // 'ALL' | 'READING' | 'COMPLETED'
@@ -25,6 +27,16 @@
         mangas = favs;
       } else if (mode === 'feed') {
         mangas = favs;
+        const items = [];
+        for (const m of favs.slice(0, 20)) {
+          try {
+            const chs = await invoke('get_chapters', { sourceId: m.source_id, manga: m });
+            if (chs && chs.length > 0) {
+              items.push({ manga: m, chapter: chs[0] });
+            }
+          } catch (_) {}
+        }
+        feedItems = items;
       } else if (mode === 'downloads') {
         try {
           const dls = await invoke('get_downloads');
@@ -92,16 +104,28 @@
     }
   }
 
+  async function handleSetStatus(manga, status) {
+    try {
+      await invoke('set_manga_status', { mangaId: manga.id, status });
+      manga.status = status;
+      mangas = [...mangas];
+      notify(`Marked "${manga.title}" as ${status === 'COMPLETED' ? 'Completed' : 'Reading'}`);
+    } catch (e) {
+      notify('Error updating status: ' + e);
+    }
+  }
+
   $: filteredMangas = mangas.filter(m => {
     const matchesSearch = !searchQuery || 
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (m.author && m.author.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const prog = progressMap[m.id] || 0;
+    const isCompleted = m.status === 'COMPLETED' || prog >= 0.98;
     if (activeFilter === 'READING') {
-      return matchesSearch && prog > 0 && prog < 0.95;
+      return matchesSearch && !isCompleted;
     } else if (activeFilter === 'COMPLETED') {
-      return matchesSearch && prog >= 0.95;
+      return matchesSearch && isCompleted;
     }
     return matchesSearch;
   });
@@ -167,6 +191,43 @@
         <div class="spinner"></div>
         <p>Loading shelf...</p>
       </div>
+    {:else if mode === 'feed'}
+      {#if feedItems.length === 0}
+        <EmptyState
+          title="No Updates in Feed"
+          description="Add manga to your Favourites to receive the newest chapter releases here."
+          actionLabel="Explore Sources"
+          onAction={() => navigate('explore')}
+        />
+      {:else}
+        <div class="feed-list">
+          {#each feedItems as item}
+            <div 
+              class="feed-item" 
+              role="button"
+              tabindex="0"
+              on:click={() => openReader(item.manga, item.chapter, 0)}
+              on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && openReader(item.manga, item.chapter, 0)}
+            >
+              <div class="feed-thumb-wrap">
+                {#if item.manga.cover_url}
+                  <img src={item.manga.cover_url} alt="" class="feed-thumb" />
+                {:else}
+                  <div class="feed-thumb-fallback"><BookOpen size={16} /></div>
+                {/if}
+              </div>
+              <div class="feed-info">
+                <span class="feed-manga-title">{item.manga.title}</span>
+                <div class="feed-chapter-row">
+                  <span class="feed-ch-badge">{item.chapter.title || ('Chapter ' + (item.chapter.number ?? 'New'))}</span>
+                  <span class="feed-source-tag">{item.manga.source_id}</span>
+                </div>
+              </div>
+              <button class="feed-read-action" type="button">Read</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
     {:else}
       <CoverGrid
         mangas={filteredMangas}
@@ -174,11 +235,10 @@
         {favoritesSet}
         onToggleFavorite={handleToggleFavorite}
         onDelete={mode === 'history' ? handleDeleteHistory : null}
+        onSetStatus={handleSetStatus}
         emptyMessage={
           mode === 'favorites' 
             ? 'No favourite manga yet. Explore to add some!' 
-            : mode === 'feed'
-            ? 'No updates in your feed yet.'
             : mode === 'downloads'
             ? 'No downloaded chapters found.'
             : 'No reading history yet.'
@@ -247,19 +307,118 @@
   }
 
   :global(.title-icon.fav) {
-    color: #ef4444;
+    color: var(--z-accent);
   }
 
   :global(.title-icon.feed) {
-    color: #f59e0b;
+    color: var(--z-accent);
   }
 
   :global(.title-icon.dl) {
-    color: #10b981;
+    color: var(--z-accent);
   }
 
   :global(.title-icon.hist) {
     color: var(--z-accent);
+  }
+
+  /* FEED VIEW STYLING */
+  .feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--z-space-3);
+    width: 100%;
+    max-width: 820px;
+    padding: var(--z-space-4) 0;
+  }
+
+  .feed-item {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-4);
+    background: var(--z-surface);
+    border: 1px solid var(--z-border);
+    border-radius: var(--z-radius-md);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background var(--z-duration-fast) var(--z-ease-out), border-color var(--z-duration-fast) var(--z-ease-out);
+  }
+
+  .feed-item:hover {
+    background: var(--z-surface-raised);
+    border-color: var(--z-accent);
+  }
+
+  .feed-thumb-wrap {
+    width: 44px;
+    height: 58px;
+    border-radius: var(--z-radius-sm);
+    overflow: hidden;
+    background: var(--z-surface-raised);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .feed-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .feed-thumb-fallback {
+    color: var(--z-text-muted);
+  }
+
+  .feed-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .feed-manga-title {
+    font-size: var(--z-text-sm);
+    font-weight: 600;
+    color: var(--z-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feed-chapter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feed-ch-badge {
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    color: var(--z-accent);
+    background: var(--z-accent-muted);
+    padding: 2px 8px;
+    border-radius: 9999px;
+  }
+
+  .feed-source-tag {
+    font-size: var(--z-text-xs);
+    color: var(--z-text-muted);
+    text-transform: uppercase;
+  }
+
+  .feed-read-action {
+    padding: 6px 14px;
+    background: var(--z-accent);
+    color: #ffffff;
+    font-size: var(--z-text-xs);
+    font-weight: 600;
+    border-radius: var(--z-radius-full);
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
   }
 
   .count-badge {

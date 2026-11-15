@@ -7,6 +7,7 @@ export const appState = $state({
   settings: null,
   activeManga: null,
   activeChapter: null,
+  initialPageIndex: 0,
   selectedSourceId: 'MANGADEX',
   notification: null,
 });
@@ -32,9 +33,10 @@ export function openManga(manga) {
   navigate('details');
 }
 
-export function openReader(manga, chapter) {
+export function openReader(manga, chapter, page = 0) {
   appState.activeManga = manga;
   appState.activeChapter = chapter;
+  appState.initialPageIndex = page;
   navigate('reader');
 }
 

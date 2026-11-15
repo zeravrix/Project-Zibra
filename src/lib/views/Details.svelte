@@ -5,7 +5,8 @@
   import { appState, goBack, openReader, notify } from '../stores/app.svelte.js';
   import { 
     ArrowLeft, Heart, Play, Download, BookOpen, 
-    Calendar, User, Tag, Check, Sparkles, ShieldAlert, X 
+    Calendar, User, Tag, Check, Sparkles, ShieldAlert, X,
+    CheckCircle, Clock
   } from 'lucide-svelte';
 
   let manga = appState.activeManga;
@@ -122,6 +123,19 @@
     openReader(manga, target);
   }
 
+  async function handleToggleStatus() {
+    if (!manga) return;
+    const nextStatus = manga.status === 'COMPLETED' ? 'READING' : 'COMPLETED';
+    try {
+      await invoke('set_manga_status', { mangaId: manga.id, status: nextStatus });
+      manga.status = nextStatus;
+      appState.activeManga = { ...manga };
+      notify(`Status: ${nextStatus === 'COMPLETED' ? 'Completed' : 'Reading'}`);
+    } catch (e) {
+      notify('Failed to update status: ' + e);
+    }
+  }
+
   $: displayedChapters = (() => {
     let list = [...chapters].filter(c => !chapterFilter || c.title.toLowerCase().includes(chapterFilter.toLowerCase()));
     return sortAscending ? list.reverse() : list;
@@ -206,6 +220,15 @@
             <button class="primary-btn" on:click={handleStartReading} disabled={chapters.length === 0}>
               <Play size={18} fill="currentColor" />
               <span>{progress ? 'Continue Reading' : 'Start Reading'}</span>
+            </button>
+            <button class="status-btn" class:completed={manga.status === 'COMPLETED'} on:click={handleToggleStatus} title="Toggle Reading or Completed status">
+              {#if manga.status === 'COMPLETED'}
+                <CheckCircle size={16} />
+                <span>Completed</span>
+              {:else}
+                <Clock size={16} />
+                <span>Reading</span>
+              {/if}
             </button>
             <button class="icon-action-btn" class:fav={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? "In Library" : "Add to Library"}>
               <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
@@ -524,6 +547,32 @@
 
   .icon-action-btn:hover {
     background: var(--z-border-hover);
+  }
+
+  .status-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: var(--z-radius-md);
+    background: var(--z-surface-raised);
+    border: 1px solid var(--z-border);
+    color: var(--z-text);
+    font-size: var(--z-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--z-duration-fast) var(--z-ease-out);
+  }
+
+  .status-btn:hover {
+    background: var(--z-border-hover);
+    border-color: var(--z-accent);
+  }
+
+  .status-btn.completed {
+    background: rgba(34, 197, 94, 0.16);
+    border-color: #22c55e;
+    color: #22c55e;
   }
 
   .cf-action-btn {

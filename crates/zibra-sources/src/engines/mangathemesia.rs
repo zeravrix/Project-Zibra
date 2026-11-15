@@ -149,6 +149,7 @@ impl MangaThemesiaEngine {
             if let Some(e) = last_err {
                 return Err(e);
             }
+            anyhow::bail!("0 titles matched selectors on {} (Site layout or endpoint changed)", self.name);
         }
 
         Ok(MangaPageResult {

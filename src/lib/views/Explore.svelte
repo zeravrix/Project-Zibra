@@ -261,9 +261,10 @@
       loadError = String(e);
       if (!append) {
         mangaList = [];
-        cloudflareNeeded = true;
+        const errStr = String(e).toLowerCase();
+        cloudflareNeeded = errStr.includes('403') || errStr.includes('cloudflare') || errStr.includes('challenge');
       }
-      notify(`Failed to fetch from ${selectedSource.name}`);
+      notify(`Error from ${selectedSource.name}: ${e}`);
     } finally {
       loading = false;
       loadingMore = false;
@@ -667,10 +668,10 @@
 
       {:else if mangaList.length === 0}
         <EmptyState
-          title="No Titles Found"
-          description="No manga or manhwa returned from {selectedSource?.name} for this query."
-          actionLabel="Try Popular"
-          onAction={() => handleTabChange('popular')}
+          title={loadError ? "Source Issue Detected" : "No Titles Found"}
+          description={loadError || `No manga or manhwa returned from ${selectedSource?.name} for the ${activeTab} tab.`}
+          actionLabel={activeTab === 'latest' ? "Try Popular Tab" : "Try Latest Tab"}
+          onAction={() => handleTabChange(activeTab === 'latest' ? 'popular' : 'latest')}
         />
 
       {:else}

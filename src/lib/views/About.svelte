@@ -1,7 +1,8 @@
 <script>
   import { 
-    Globe, MessageSquare, Code2, ShieldCheck, Cpu, ArrowUpRight, Heart
+    Globe, MessageSquare, Code2, ShieldCheck, Cpu, ArrowUpRight, Heart, ArrowLeft
   } from 'lucide-svelte';
+  import { navigate } from '../stores/app.svelte.js';
 
   const links = [
     {
@@ -30,6 +31,14 @@
 
 <div class="about-view">
   <div class="about-content">
+    <!-- TOP NAVIGATION -->
+    <div class="top-nav-row">
+      <button class="back-pill" on:click={() => navigate('settings')}>
+        <ArrowLeft size={16} />
+        <span>Back to Settings</span>
+      </button>
+    </div>
+
     <!-- HERO HEADER -->
     <div class="about-hero">
       <div class="logo-pod">
@@ -113,6 +122,33 @@
     gap: var(--z-space-6);
     margin: 0 auto;
     padding-bottom: 60px;
+  }
+
+  .top-nav-row {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .back-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    border: 1px solid var(--z-border);
+    background: var(--z-surface);
+    color: var(--z-text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .back-pill:hover {
+    color: var(--z-text);
+    background: var(--z-surface-hover);
+    border-color: var(--z-accent);
   }
 
   .about-hero {

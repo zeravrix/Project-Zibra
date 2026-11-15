@@ -271,7 +271,7 @@ impl Source for GenericHtmlEngine {
             ".description-summary, .summary__content, .entry-content[itemprop=description], .description, #noidungm, .panel-story-info-description, .post-content",
         )
         .unwrap();
-        let img_sel = Selector::parse(".summary_image img, .thumb img, .info-image img, .manga-thumb img, .cover img, img").unwrap();
+        let img_sel = Selector::parse(".summary_image img, .thumb img, .info-image img, .manga-thumb img, .cover img, .poster img").unwrap();
         let genre_sel = Selector::parse(".genres-content a, .mgen a, a[href*='genre'], .genre a").unwrap();
 
         let mut updated = manga.clone();
@@ -289,7 +289,9 @@ impl Source for GenericHtmlEngine {
         }
         if let Some(img) = doc.select(&img_sel).next() {
             if let Some(cov) = extract_best_image_url(img, &manga.id) {
-                updated.cover_url = Some(cov);
+                if !cov.is_empty() && !cov.to_lowercase().contains("logo") && !cov.to_lowercase().contains("favicon") {
+                    updated.cover_url = Some(cov);
+                }
             }
         }
         let genres: Vec<String> = doc

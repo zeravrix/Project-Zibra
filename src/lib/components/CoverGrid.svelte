@@ -8,6 +8,7 @@
   export let favoritesSet = new Set();
   export let onToggleFavorite = null;
   export let onDelete = null;
+  export let onSetStatus = null;
   export let emptyMessage = "No titles found";
   export let emptyActionLabel = "Explore Manga";
   export let onEmptyAction = () => navigate('explore');
@@ -29,6 +30,7 @@
         isFavorite={favoritesSet.has(manga.id)}
         onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(manga) : null}
         onDelete={onDelete ? () => onDelete(manga) : null}
+        onSetStatus={onSetStatus ? (status) => onSetStatus(manga, status) : null}
         on:click={() => openManga(manga)}
       />
     {/each}

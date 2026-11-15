@@ -234,9 +234,25 @@ impl MadaraEngine {
         }
 
         if items.is_empty() {
+            // Auto fallback: if latest returned 0, try popular/views
+            if query.is_none() && order == "latest" {
+                if let Some(fallback_items) = self.ajax_list(p, "views", None).await {
+                    if !fallback_items.is_empty() {
+                        return Ok(MangaPageResult { items: fallback_items, has_next_page: true });
+                    }
+                }
+            } else if query.is_none() && order == "views" {
+                if let Some(fallback_items) = self.ajax_list(p, "latest", None).await {
+                    if !fallback_items.is_empty() {
+                        return Ok(MangaPageResult { items: fallback_items, has_next_page: true });
+                    }
+                }
+            }
+
             if let Some(e) = last_err {
                 return Err(e);
             }
+            anyhow::bail!("0 titles matched selectors on {} (Site layout or endpoint changed)", self.name);
         }
 
         let has_next = !items.is_empty();
@@ -295,7 +311,7 @@ impl Source for MadaraEngine {
         let html = self.fetch_html(&manga.id).await?;
         let doc = Html::parse_document(&html);
         let title_sel = Selector::parse(".post-title h1, .summary_content h1, h1.entry-title, h1").unwrap();
-        let img_sel = Selector::parse(".summary_image img, .profile-manga img, img").unwrap();
+        let img_sel = Selector::parse(".summary_image img, .profile-manga img, .item-thumb img, .post-thumb img, .featured-image img").unwrap();
         let desc_sel = Selector::parse(".description-summary, .summary__content, .summary_content, .description").unwrap();
         let genre_sel = Selector::parse(".genres-content a, .genres a, .mgen a").unwrap();
 
@@ -310,6 +326,7 @@ impl Source for MadaraEngine {
             .select(&img_sel)
             .next()
             .and_then(|img| extract_best_image_url(img, &manga.id))
+            .filter(|c| !c.is_empty() && !c.to_lowercase().contains("logo") && !c.to_lowercase().contains("favicon"))
             .or_else(|| manga.cover_url.clone());
 
         let description = doc

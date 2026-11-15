@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { appState, updateSettings, notify } from '../stores/app.svelte.js';
+  import { appState, updateSettings, notify, navigate } from '../stores/app.svelte.js';
   import { 
-    Palette, BookOpen, Zap, ShieldCheck, Check, Trash2
+    Palette, BookOpen, Zap, ShieldCheck, Check, Trash2, Settings as SettingsIcon, Info, Sliders, Maximize
   } from 'lucide-svelte';
 
   let currentSettings = $state(null);
@@ -156,7 +156,10 @@
 
 <div class="settings-view">
   <header class="settings-header">
-    <h1 class="page-title">Settings</h1>
+    <h1 class="page-title">
+      <SettingsIcon size={26} class="title-icon" />
+      Settings
+    </h1>
     <p class="page-desc">Theme styling, reader layout, and system performance preferences.</p>
   </header>
 
@@ -445,6 +448,23 @@
           </button>
         </div>
       </section>
+
+      <!-- 4. ABOUT SECTION -->
+      <section class="settings-card about-shortcut-card">
+        <div class="about-card-content">
+          <div class="about-brand-group">
+            <img src="/logo.png" alt="Zibrax" class="settings-logo-img" />
+            <div>
+              <h2 class="card-title">Zibrax Desktop</h2>
+              <p class="card-subtitle">v1.8.0 • 100% Pure Rust Backend & Svelte 5</p>
+            </div>
+          </div>
+          <button class="about-action-btn" on:click={() => navigate('about')}>
+            <Info size={16} />
+            <span>About & Links</span>
+          </button>
+        </div>
+      </section>
     </div>
   {/if}
 </div>
@@ -468,6 +488,57 @@
     color: var(--z-text);
     margin-bottom: 4px;
     letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-3);
+  }
+
+  :global(.title-icon) {
+    color: var(--z-accent);
+  }
+
+  .about-shortcut-card {
+    border-color: rgba(66, 133, 244, 0.25);
+  }
+
+  .about-card-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--z-space-4);
+    flex-wrap: wrap;
+  }
+
+  .about-brand-group {
+    display: flex;
+    align-items: center;
+    gap: var(--z-space-4);
+  }
+
+  .settings-logo-img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(66, 133, 244, 0.45));
+  }
+
+  .about-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--z-accent);
+    color: #ffffff;
+    font-size: var(--z-text-sm);
+    font-weight: 600;
+    border-radius: var(--z-radius-md);
+    transition: all var(--z-duration-fast) var(--z-ease-out);
+    box-shadow: 0 4px 16px var(--z-accent-glow);
+  }
+
+  .about-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--z-accent-glow);
   }
 
   .page-desc {
