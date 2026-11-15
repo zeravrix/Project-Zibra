@@ -27,7 +27,7 @@
   let sourceCatalogSearch = '';
   let inSourceSearch = '';
   let selectedLang = 'ALL';
-  let activeTab = 'popular'; // 'popular' | 'latest'
+  let activeTab = 'latest'; // Default to latest manhwa
   let currentPage = 1;
   let hasNextPage = true;
   let favoritesSet = new Set();
@@ -224,6 +224,7 @@
     loadError = null;
     cloudflareNeeded = false;
     inSourceSearch = '';
+    activeTab = 'latest';
     loadMangas(1, false);
   }
 
@@ -487,10 +488,8 @@
           <h1 class="main-title">
             <Globe size={28} class="brand-icon" />
             <span>Source Catalog</span>
-            <span class="count-pill">{allSources.length} Pure Rust Sources</span>
           </h1>
         </div>
-        <p class="subtitle">Complete catalog of 1,000+ manga, manhwa & manhua sources</p>
       </div>
 
       <div class="search-wrap">
@@ -778,7 +777,7 @@
     align-items: center;
   }
 
-  :global(.search-bar-icon) {
+  .explore-search-wrap :global(.search-bar-icon) {
     position: absolute;
     left: 14px;
     color: var(--z-text-muted);
@@ -909,22 +908,19 @@
     border-radius: var(--z-radius-full);
   }
 
-  .subtitle {
-    font-size: var(--z-text-xs);
-    color: var(--z-text-muted);
-  }
-
   .search-wrap {
     position: relative;
     width: 300px;
   }
 
-  :global(.search-icon) {
+  .search-wrap :global(.search-icon),
+  .source-search-wrap :global(.search-icon) {
     position: absolute;
     left: 12px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--z-text-muted);
+    pointer-events: none;
   }
 
   .catalog-search-input {

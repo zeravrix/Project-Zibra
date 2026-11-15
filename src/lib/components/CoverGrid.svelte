@@ -7,6 +7,7 @@
   export let progressMap = {};
   export let favoritesSet = new Set();
   export let onToggleFavorite = null;
+  export let onDelete = null;
   export let emptyMessage = "No titles found";
   export let emptyActionLabel = "Explore Manga";
   export let onEmptyAction = () => navigate('explore');
@@ -27,6 +28,7 @@
         progress={progressMap[manga.id] || 0}
         isFavorite={favoritesSet.has(manga.id)}
         onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(manga) : null}
+        onDelete={onDelete ? () => onDelete(manga) : null}
         on:click={() => openManga(manga)}
       />
     {/each}

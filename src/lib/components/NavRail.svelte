@@ -1,7 +1,6 @@
 <script>
   import { 
-    History, Heart, Compass, Rss, Download, Settings,
-    PanelLeftClose, PanelLeftOpen 
+    History, Heart, Compass, Rss, Download, Settings, Info
   } from 'lucide-svelte';
   import { appState, navigate } from '../stores/app.svelte.js';
 
@@ -19,22 +18,14 @@
 
 <nav class="nav-rail" class:expanded={appState.railExpanded}>
   <div class="rail-top">
-    <!-- BRAND LOGO ONLY (NO TITLE TEXT) & SIDEBAR TOGGLE -->
-    <div class="rail-header" class:expanded={appState.railExpanded}>
-      <button class="logo-btn" on:click={() => navigate('explore')} title="Explore">
-        <img src="/logo.png" alt="Logo" class="brand-logo-img" />
-      </button>
-
+    <!-- APP LOGO TOGGLES SIDEBAR EXPANSION (NO TEXT / NO SEPARATE TOGGLE BUTTON) -->
+    <div class="rail-header">
       <button 
-        class="toggle-btn" 
+        class="logo-btn" 
         on:click={() => appState.railExpanded = !appState.railExpanded}
-        title={appState.railExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+        title="Toggle Sidebar"
       >
-        {#if appState.railExpanded}
-          <PanelLeftClose size={18} strokeWidth={1.8} />
-        {:else}
-          <PanelLeftOpen size={18} strokeWidth={1.8} />
-        {/if}
+        <img src="/logo.png" alt="Zibrax" class="brand-logo-img" />
       </button>
     </div>
 
@@ -58,7 +49,7 @@
     </div>
   </div>
 
-  <!-- RAIL BOTTOM: FEED & DOWNLOADS ABOVE THE LINE, SETTINGS BELOW -->
+  <!-- RAIL BOTTOM: FEED, DOWNLOADS, SETTINGS & ABOUT -->
   <div class="rail-bottom">
     <div class="items-list">
       {#each secondaryNav as item (item.id)}
@@ -93,6 +84,20 @@
         <span class="label">Settings</span>
       {/if}
     </button>
+
+    <button
+      class="rail-item"
+      class:active={appState.currentScreen === 'about'}
+      on:click={() => navigate('about')}
+      title={!appState.railExpanded ? "About Zibrax" : undefined}
+    >
+      <div class="icon-wrap">
+        <Info size={20} strokeWidth={1.8} />
+      </div>
+      {#if appState.railExpanded}
+        <span class="label">About</span>
+      {/if}
+    </button>
   </div>
 </nav>
 
@@ -106,14 +111,16 @@
     flex-direction: column;
     justify-content: space-between;
     padding: var(--z-space-3) var(--z-space-2);
-    transition: width var(--z-duration-normal) var(--z-ease-out);
+    transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 50;
     flex-shrink: 0;
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   .nav-rail.expanded {
-    width: 200px;
+    width: 190px;
   }
 
   .rail-top {
@@ -124,59 +131,35 @@
 
   .rail-header {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
     width: 100%;
-    padding: 4px 0;
-  }
-
-  .rail-header.expanded {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 8px;
+    padding: 6px 0 10px 0;
   }
 
   .logo-btn {
     background: none;
     border: none;
-    padding: 0;
+    padding: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: var(--z-radius-md);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  .logo-btn:hover {
+    background: var(--z-surface-raised);
+    transform: scale(1.05);
   }
 
   .brand-logo-img {
     width: 32px;
     height: 32px;
     object-fit: contain;
-    filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.5));
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .brand-logo-img:hover {
-    transform: scale(1.1);
-  }
-
-  .toggle-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--z-radius-md);
-    color: var(--z-text-muted);
-    background: transparent;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all var(--z-duration-fast) var(--z-ease-out);
-  }
-
-  .toggle-btn:hover {
-    background: var(--z-surface-raised);
-    color: var(--z-text);
+    filter: drop-shadow(0 0 10px rgba(66, 133, 244, 0.45));
+    display: block;
   }
 
   .items-list {
@@ -189,10 +172,11 @@
     display: flex;
     align-items: center;
     gap: var(--z-space-3);
-    padding: var(--z-space-2);
+    padding: 0 var(--z-space-2);
     border-radius: var(--z-radius-md);
     color: var(--z-text-muted);
-    transition: all var(--z-duration-fast) var(--z-ease-out);
+    transition: background var(--z-duration-fast) var(--z-ease-out),
+                color var(--z-duration-fast) var(--z-ease-out);
     position: relative;
     height: 42px;
     width: 100%;
@@ -200,6 +184,7 @@
     border: none;
     cursor: pointer;
     text-align: left;
+    box-sizing: border-box;
   }
 
   .rail-item:hover {
@@ -211,7 +196,6 @@
     background: var(--z-accent-muted);
     color: var(--z-accent);
     font-weight: 600;
-    box-shadow: inset 0 0 10px var(--z-accent-muted);
   }
 
   .icon-wrap {

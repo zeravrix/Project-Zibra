@@ -94,7 +94,7 @@ const PALETTE_COLORS = {
 export function applyTheme(settings) {
   if (!settings) return;
   const root = document.documentElement;
-  const theme = settings.is_amoled ? 'amoled' : (settings.app_theme?.toLowerCase() || 'dark');
+  const theme = settings.is_amoled ? 'amoled' : (settings.theme?.toLowerCase() || settings.app_theme?.toLowerCase() || 'dark');
   root.setAttribute('data-theme', theme);
   const themeKey = String(settings.color_theme || 'totoro').toLowerCase();
   const hex = PALETTE_COLORS[themeKey] || (themeKey.startsWith('#') ? themeKey : '#4285f4');

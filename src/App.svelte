@@ -7,6 +7,7 @@
   import Details from './lib/views/Details.svelte';
   import Reader from './lib/views/Reader.svelte';
   import Settings from './lib/views/Settings.svelte';
+  import About from './lib/views/About.svelte';
   import { appState, loadSettings } from './lib/stores/app.svelte.js';
 
   onMount(async () => {
@@ -34,6 +35,8 @@
       <Library mode="downloads" />
     {:else if appState.currentScreen === 'settings'}
       <Settings />
+    {:else if appState.currentScreen === 'about'}
+      <About />
     {:else if appState.currentScreen === 'details'}
       <Details />
     {:else if appState.currentScreen === 'reader'}

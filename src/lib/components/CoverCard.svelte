@@ -168,6 +168,7 @@
                 box-shadow var(--z-duration-normal) var(--z-ease-out),
                 border-color var(--z-duration-normal) var(--z-ease-out);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    isolation: isolate;
   }
 
   .card:hover .cover-wrapper {
@@ -183,7 +184,8 @@
     display: block;
     opacity: 0;
     transition: opacity var(--z-duration-normal) var(--z-ease-out);
-    image-rendering: auto;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
   }
 
   img.loaded {

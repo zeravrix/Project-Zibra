@@ -82,6 +82,16 @@
     }
   }
 
+  async function handleDeleteHistory(manga) {
+    try {
+      await invoke('remove_history', { mangaId: manga.id });
+      mangas = mangas.filter(m => m.id !== manga.id);
+      notify(`Removed "${manga.title}" from history`);
+    } catch (e) {
+      notify('Error removing from history: ' + e);
+    }
+  }
+
   $: filteredMangas = mangas.filter(m => {
     const matchesSearch = !searchQuery || 
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -163,6 +173,7 @@
         {progressMap}
         {favoritesSet}
         onToggleFavorite={handleToggleFavorite}
+        onDelete={mode === 'history' ? handleDeleteHistory : null}
         emptyMessage={
           mode === 'favorites' 
             ? 'No favourite manga yet. Explore to add some!' 

@@ -357,73 +357,51 @@ pub async fn open_cloudflare_solver(
 
     let init_script = r#"
         (function() {
-            function initZibraBar() {
-                if (document.getElementById('zibra-lightbrowser-header')) return;
+            function initZibraPill() {
+                if (document.getElementById('zibra-cf-pill')) return;
                 
-                try {
-                    document.documentElement.style.setProperty('margin-top', '52px', 'important');
-                } catch (_) {}
+                const pill = document.createElement('div');
+                pill.id = 'zibra-cf-pill';
+                pill.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(35,33,44,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f4f3f7;border:1px solid rgba(255,255,255,0.15);border-radius:9999px;display:flex;align-items:center;gap:10px;padding:8px 16px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;font-size:12px;';
 
-                const header = document.createElement('div');
-                header.id = 'zibra-lightbrowser-header';
-                header.style.cssText = 'position:fixed;top:0;left:0;right:0;height:50px;z-index:2147483647;background:#13131a;color:#f4f4f5;border-bottom:2px solid #8b5cf6;display:flex;align-items:center;justify-content:space-between;padding:0 14px;box-shadow:0 4px 20px rgba(0,0,0,0.8);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;box-sizing:border-box;';
-
-                const leftGroup = document.createElement('div');
-                leftGroup.style.cssText = 'display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden;';
-
-                const iconTitle = document.createElement('div');
-                iconTitle.innerHTML = '<span style="font-size:16px;">🛡️</span> <strong style="font-size:13px;color:#c4b5fd;white-space:nowrap;">Captcha Solver</strong>';
-                iconTitle.style.cssText = 'display:flex;align-items:center;gap:6px;';
-
-                const statusMsg = document.createElement('span');
-                statusMsg.id = 'zibra-status-msg';
-                statusMsg.innerText = 'Click the captcha checkbox below';
-                statusMsg.style.cssText = 'font-size:11px;color:#a1a1aa;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:180px;';
-
-                leftGroup.appendChild(iconTitle);
-                leftGroup.appendChild(statusMsg);
-
-                const rightGroup = document.createElement('div');
-                rightGroup.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+                const label = document.createElement('span');
+                label.innerText = 'Cloudflare Verification';
+                label.style.cssText = 'font-weight:600;color:#c4b5fd;';
 
                 const reloadBtn = document.createElement('button');
                 reloadBtn.innerText = '↻';
                 reloadBtn.title = 'Reload page';
-                reloadBtn.style.cssText = 'background:#27272a;color:#d4d4d8;border:1px solid #3f3f46;border-radius:6px;width:30px;height:30px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+                reloadBtn.style.cssText = 'background:rgba(255,255,255,0.08);color:#f4f3f7;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;';
                 reloadBtn.onclick = () => window.location.reload();
 
                 const syncBtn = document.createElement('button');
                 syncBtn.id = 'zibra-sync-btn';
-                syncBtn.innerText = '✓ Done & Sync';
-                syncBtn.style.cssText = 'background:#8b5cf6;color:#ffffff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;';
-                
+                syncBtn.innerText = 'Done & Sync';
+                syncBtn.style.cssText = 'background:#4f46e5;color:#ffffff;border:none;border-radius:9999px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s;';
+
                 let synced = false;
                 function doSync(auto) {
                     if (synced) return;
                     synced = true;
-                    syncBtn.innerText = auto ? '✓ Solved! Syncing...' : 'Syncing...';
+                    syncBtn.innerText = auto ? '✓ Solved!' : 'Syncing...';
                     syncBtn.style.background = '#10b981';
-                    statusMsg.innerText = 'Syncing cookies and closing...';
-                    statusMsg.style.color = '#34d399';
                     const c = document.cookie || '';
                     const ua = navigator.userAgent || '';
                     setTimeout(() => {
                         window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c) + '&ua=' + encodeURIComponent(ua);
-                    }, 500);
+                    }, 400);
                 }
 
                 syncBtn.onclick = () => doSync(false);
 
-                rightGroup.appendChild(reloadBtn);
-                rightGroup.appendChild(syncBtn);
-
-                header.appendChild(leftGroup);
-                header.appendChild(rightGroup);
+                pill.appendChild(label);
+                pill.appendChild(reloadBtn);
+                pill.appendChild(syncBtn);
 
                 if (document.body) {
-                    document.body.prepend(header);
+                    document.body.appendChild(pill);
                 } else if (document.documentElement) {
-                    document.documentElement.appendChild(header);
+                    document.documentElement.appendChild(pill);
                 }
 
                 const checkInterval = setInterval(() => {
@@ -440,12 +418,12 @@ pub async fn open_cloudflare_solver(
             }
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initZibraBar);
+                document.addEventListener('DOMContentLoaded', initZibraPill);
             } else {
-                initZibraBar();
+                initZibraPill();
             }
-            setTimeout(initZibraBar, 1000);
-            setTimeout(initZibraBar, 2500);
+            setTimeout(initZibraPill, 1000);
+            setTimeout(initZibraPill, 2500);
         })();
     "#;
 
