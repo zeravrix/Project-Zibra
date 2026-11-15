@@ -247,13 +247,17 @@ pub async fn fetch_image_base64(
     }
     req = req.header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
 
-    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let resp = req.send().await.map_err(|e| e.to_string())?.error_for_status().map_err(|e| e.to_string())?;
     let content_type = resp
         .headers()
         .get("content-type")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("image/jpeg")
         .to_string();
+
+    if !content_type.starts_with("image/") {
+        return Err(format!("not an image ({content_type}) - likely a Cloudflare/error page"));
+    }
 
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);

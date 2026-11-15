@@ -21,6 +21,21 @@ static THUMB_SIZE_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[-_]\d{2,5}x\d{2,5}(\.[a-zA-Z0-9]{2,5})").unwrap()
 });
 
+/// The whole host is unusable (down, or behind a Cloudflare challenge); trying other paths on it only burns time.
+#[derive(Debug)]
+pub struct HostUnavailable(pub String);
+
+impl std::fmt::Display for HostUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for HostUnavailable {}
+
+pub fn is_host_unavailable(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<HostUnavailable>().is_some()
+}
+
 pub fn parse_chapter_number(text: &str) -> Option<f32> {
     CHAPTER_NUMBER_REGEX
         .captures(text)
@@ -285,14 +300,15 @@ pub async fn fetch_html_resilient(
                 }
             }
             if status.as_u16() == 403 {
-                anyhow::bail!("Cloudflare / Bot Challenge (HTTP 403). Use the light browser solver to sync cookies.");
+                return Err(HostUnavailable("Cloudflare / Bot Challenge (HTTP 403). Use the light browser solver to sync cookies.".into()).into());
             } else if status.as_u16() == 404 {
                 anyhow::bail!("HTTP 404 Not Found (Endpoint does not exist on this source)");
             } else if status.as_u16() == 503 {
-                anyhow::bail!("HTTP 503 Service Unavailable (Source server down or under heavy load)");
+                return Err(HostUnavailable("HTTP 503 Service Unavailable (Source server down or under heavy load)".into()).into());
             }
             anyhow::bail!("HTTP {}", status);
         }
+        Err(e) if e.is_connect() || e.is_timeout() => Err(HostUnavailable(format!("{url}: {e}")).into()),
         Err(e) => Err(e.into()),
     }
 }

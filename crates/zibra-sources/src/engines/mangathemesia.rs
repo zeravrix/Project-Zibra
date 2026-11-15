@@ -1,5 +1,5 @@
 use crate::extractor::{
-    extract_best_image_url, extract_chapter_pages, fetch_html_resilient, parse_chapter_number,
+    extract_best_image_url, extract_chapter_pages, fetch_html_resilient, is_host_unavailable, parse_chapter_number,
     resolve_url,
 };
 use crate::{MangaPageResult, Source};
@@ -141,6 +141,7 @@ impl MangaThemesiaEngine {
                     }
                 }
                 Ok(_) => {}
+                Err(e) if is_host_unavailable(&e) => return Err(e),
                 Err(e) => last_err = Some(e),
             }
         }
