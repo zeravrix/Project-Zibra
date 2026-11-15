@@ -18,7 +18,6 @@
   let currentPageIndex = 0;
   let showHud = true;
   let showSettings = false;
-  let hudTimeout = null;
   let isFullscreen = false;
 
   // Reader configuration (loaded from settings or defaults)
@@ -223,16 +222,6 @@
     if (!showHud) showSettings = false;
   }
 
-  function handleMouseMove() {
-    showHud = true;
-    clearTimeout(hudTimeout);
-    hudTimeout = setTimeout(() => {
-      if (!showSettings) {
-        showHud = false;
-      }
-    }, 4500);
-  }
-
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => isFullscreen = true).catch(() => {});
@@ -334,7 +323,6 @@
 
   onDestroy(() => {
     window.removeEventListener('keydown', handleKeydown);
-    clearTimeout(hudTimeout);
     saveCurrentProgress();
     if (unlistenCf) unlistenCf();
   });
@@ -343,7 +331,6 @@
 <div
   class="reader-container"
   class:invert={invertColors}
-  on:mousemove={handleMouseMove}
   on:click={toggleHud}
   role="region"
   aria-label="Manga Reader"
