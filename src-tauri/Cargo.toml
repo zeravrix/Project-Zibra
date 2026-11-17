@@ -1,6 +1,6 @@
 [package]
 name = "zibra-desktop"
-version = "2.2.0"
+version = "2.2.1"
 description = "ZibraX Native Manga & Manhwa Reader"
 authors = ["ZERAVRIX Team <contact@zeravrix.org>"]
 edition = "2021"

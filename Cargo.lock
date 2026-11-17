@@ -5514,7 +5514,7 @@ dependencies = [
 
 [[package]]
 name = "zibra-core"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5538,7 +5538,7 @@ dependencies = [
 
 [[package]]
 name = "zibra-desktop"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5559,7 +5559,7 @@ dependencies = [
 
 [[package]]
 name = "zibra-reader"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -5575,7 +5575,7 @@ dependencies = [
 
 [[package]]
 name = "zibra-sources"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -7,7 +7,7 @@
 **High-Performance Native Manga, Manhwa & Comic Reader for Linux & Windows**
 
 [![Official Website](https://img.shields.io/badge/Website-zeravrix.pages.dev-7C4DFF?style=for-the-badge&logo=googlechrome&logoColor=white)](https://zeravrix.pages.dev)
-[![Release](https://img.shields.io/badge/Release-v2.2.0-00E676?style=for-the-badge)](https://github.com/zeravrix/ZibraX/releases)
+[![Release](https://img.shields.io/badge/Release-v2.2.1-00E676?style=for-the-badge)](https://github.com/zeravrix/ZibraX/releases)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-00B0FF?style=for-the-badge&logo=linux&logoColor=white)](#downloads--installation)
 [![Backend](https://img.shields.io/badge/Backend-Rust%20Engine-DEA584?style=for-the-badge&logo=rust&logoColor=black)](https://www.rust-lang.org/)
 [![Frontend](https://img.shields.io/badge/Frontend-Tauri%20v2%20%2B%20Svelte%205-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev/)
