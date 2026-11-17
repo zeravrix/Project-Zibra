@@ -8,7 +8,7 @@
   let currentSettings = $state(null);
 
   const palettes = [
-    { id: 'Totoro', name: 'Zibrax Blue', color: '#4285f4' },
+    { id: 'Totoro', name: 'ZibraX Blue', color: '#4285f4' },
     { id: 'Monet', name: 'Sky Azure', color: '#38bdf8' },
     { id: 'Miku', name: 'Teal', color: '#06b6d4' },
     { id: 'Mion', name: 'Emerald', color: '#34d399' },
@@ -453,10 +453,10 @@
       <section class="settings-card about-shortcut-card">
         <div class="about-card-content">
           <div class="about-brand-group">
-            <img src="/logo.png" alt="Zibrax" class="settings-logo-img" />
+            <img src="/logo.png" alt="ZibraX" class="settings-logo-img" />
             <div>
-              <h2 class="card-title">Zibrax Desktop</h2>
-              <p class="card-subtitle">v1.8.0 • 100% Pure Rust Backend & Svelte 5</p>
+              <h2 class="card-title">ZibraX Desktop</h2>
+              <p class="card-subtitle">v2.2.0 • Rust Engine & Svelte 5</p>
             </div>
           </div>
           <button class="about-action-btn" on:click={() => navigate('about')}>

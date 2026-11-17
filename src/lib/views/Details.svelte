@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
-  import { appState, goBack, openReader, notify } from '../stores/app.svelte.js';
+  import { appState, goBack, openReader, notify, toChronologicalChapters } from '../stores/app.svelte.js';
   import { 
     ArrowLeft, Heart, Play, Download, BookOpen, 
     Calendar, User, Tag, Check, Sparkles, ShieldAlert, X,
@@ -114,13 +114,17 @@
 
   function handleStartReading() {
     if (chapters.length === 0) return;
-    // If progress exists, resume last chapter; otherwise read first chapter
-    let target = chapters[chapters.length - 1]; // First chronological chapter if sorted desc
+    const chronological = toChronologicalChapters(chapters);
+    let target = chronological[0];
+    let startPage = 0;
     if (progress && progress.chapter_id) {
-      const found = chapters.find(c => c.id === progress.chapter_id);
-      if (found) target = found;
+      const found = chronological.find(c => c.id === progress.chapter_id);
+      if (found) {
+        target = found;
+        startPage = progress.page_index || 0;
+      }
     }
-    openReader(manga, target);
+    openReader(manga, target, startPage, chapters);
   }
 
   async function handleToggleStatus() {
@@ -279,7 +283,7 @@
             <button
               class="chapter-row"
               class:current={progress?.chapter_id === chapter.id}
-              on:click={() => openReader(manga, chapter)}
+              on:click={() => openReader(manga, chapter, 0, chapters)}
             >
               <div class="chapter-info">
                 <span class="chapter-name">{chapter.title}</span>

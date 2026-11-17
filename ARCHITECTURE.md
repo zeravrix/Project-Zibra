@@ -1,12 +1,12 @@
-# Architecture & Engineering Reference — Zibrax
+# Architecture & Engineering Reference — ZibraX
 
-Authoritative architectural reference and design system guidelines for the **Zibrax** pure Rust + Tauri v2 / Svelte 5 application.
+Authoritative architectural reference and design system guidelines for the **ZibraX** pure Rust + Tauri v2 / Svelte 5 application.
 
 ---
 
 ## 1. System Architecture
 
-Zibrax is architected as a modular, high-performance desktop application structured into two core layers:
+ZibraX is architected as a modular, high-performance desktop application structured into two core layers:
 1. **Native Rust Host & Engine (`crates/*`, `src-tauri`)**: Owns disk persistence, SQLite WAL storage, network scraping, anti-hotlink pipelines, GPU tile slicing, and native window management.
 2. **Reactive Frontend (`src/`)**: A fluid Svelte 5 glassmorphic single-page interface with zero runtime external dependencies, compiled directly into static assets (`dist/`) and bundled into the binary via Tauri v2 custom in-memory protocols.
 

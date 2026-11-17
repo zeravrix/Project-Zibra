@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=ZIBRA (ZERAVRIX Rust Edition)
+Name=ZibraX
 GenericName=Manga & Webtoon Reader
-Comment=100% Native Rust Desktop Manga & Webtoon Reader with 1,647+ Sources
+Comment=Native Desktop Manga & Webtoon Reader with Rust Engine & Svelte 5
 Exec=/usr/bin/zibra %U
 Icon=zibra
 Terminal=false

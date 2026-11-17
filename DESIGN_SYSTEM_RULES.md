@@ -1,6 +1,6 @@
 # ZIBRA Design System & UI Integration Rules
 
-Authoritative reference for design tokens, UI components, styling, and glassmorphic layout rules for the native desktop reader (**Zibrax**).
+Authoritative reference for design tokens, UI components, styling, and glassmorphic layout rules for the native desktop reader (**ZibraX**).
 
 ---
 

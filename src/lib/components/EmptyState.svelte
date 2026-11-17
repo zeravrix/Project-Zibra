@@ -8,7 +8,7 @@
 <div class="empty-state-box">
   <div class="chibi-wrap">
     <div class="ambient-glow"></div>
-    <img src="/chibi-empty.png" alt="Zibrax Chibi" class="chibi-art" />
+    <img src="/chibi-empty.png" alt="ZibraX Chibi" class="chibi-art" />
   </div>
   <h3 class="empty-title">{title}</h3>
   {#if description}

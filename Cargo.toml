@@ -8,11 +8,11 @@ members = [
 ]
 
 [workspace.package]
-version = "2.1.0"
+version = "2.2.0"
 edition = "2021"
 authors = ["ZERAVRIX Team <contact@zeravrix.org>"]
 license = "GPL-3.0-or-later"
-repository = "https://github.com/zeravrix/Project-Zibra"
+repository = "https://github.com/zeravrix/ZibraX"
 
 [workspace.dependencies]
 anyhow = "1.0"

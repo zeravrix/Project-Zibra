@@ -2,7 +2,7 @@
   import { 
     Globe, MessageSquare, Code2, ShieldCheck, Cpu, ArrowUpRight, Heart, ArrowLeft
   } from 'lucide-svelte';
-  import { navigate } from '../stores/app.svelte.js';
+  import { goBack } from '../stores/app.svelte.js';
 
   const links = [
     {
@@ -21,8 +21,8 @@
     },
     {
       title: 'Source Code Repository',
-      url: 'https://github.com/zeravrix/Project-Zibra',
-      desc: '100% pure Rust desktop engine, MIT/GPL open source code',
+      url: 'https://github.com/zeravrix/ZibraX',
+      desc: 'Native Rust backend & Svelte 5 desktop engine, GPL-3.0 open source code',
       icon: Code2,
       badge: 'GitHub'
     }
@@ -33,7 +33,7 @@
   <div class="about-content">
     <!-- TOP NAVIGATION -->
     <div class="top-nav-row">
-      <button class="back-pill" on:click={() => navigate('settings')}>
+      <button class="back-pill" on:click={goBack}>
         <ArrowLeft size={16} />
         <span>Back to Settings</span>
       </button>
@@ -42,13 +42,13 @@
     <!-- HERO HEADER -->
     <div class="about-hero">
       <div class="logo-pod">
-        <img src="/logo.png" alt="Zibrax Logo" class="about-logo-img" />
+        <img src="/logo.png" alt="ZibraX Logo" class="about-logo-img" />
         <div class="logo-ambient-glow"></div>
       </div>
-      <h1 class="app-title">Zibrax</h1>
+      <h1 class="app-title">ZibraX</h1>
       <div class="version-badges">
-        <span class="v-pill">v1.8.0 Desktop</span>
-        <span class="v-pill rust">Pure Rust & Svelte 5</span>
+        <span class="v-pill">v2.2.0 Desktop</span>
+        <span class="v-pill rust">Rust Engine & Svelte 5</span>
         <span class="v-pill">Zero JVM</span>
       </div>
       <p class="app-tagline">
@@ -96,7 +96,7 @@
       <div class="spec-item">
         <Heart size={16} class="spec-icon" />
         <span class="spec-label">Project Family</span>
-        <span class="spec-val">ZERAVRIX Ecosystem → Zibrax 1.8.0 Edition</span>
+        <span class="spec-val">ZERAVRIX Ecosystem → ZibraX 2.2.0 Edition</span>
       </div>
     </div>
   </div>

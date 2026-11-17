@@ -15,6 +15,7 @@
   export let initialMode = 'pinned'; // 'pinned' | 'catalog' | 'browse'
 
   let viewMode = initialMode;
+  let browseReturnMode = 'pinned';
   let allSources = [];
   let pinnedSourceIds = [];
   let selectedSource = null;
@@ -217,6 +218,7 @@
   }
 
   async function openSourceBrowser(source) {
+    if (viewMode !== 'browse') browseReturnMode = viewMode;
     selectedSource = source;
     viewMode = 'browse';
     currentPage = 1;
@@ -582,7 +584,7 @@
   {:else if viewMode === 'browse'}
     <header class="browse-header">
       <div class="browse-left">
-        <button class="back-round-btn" on:click={() => (viewMode = 'pinned')} title="Back to sources">
+        <button class="back-round-btn" on:click={() => (viewMode = browseReturnMode)} title="Back to sources">
           <ArrowLeft size={18} />
         </button>
 

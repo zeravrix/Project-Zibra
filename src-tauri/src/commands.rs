@@ -371,7 +371,7 @@ pub async fn open_cloudflare_solver(
         return Ok(());
     }
 
-    let win_title = title.unwrap_or_else(|| "Cloudflare Captcha Solver — Zibrax".to_string());
+    let win_title = title.unwrap_or_else(|| "Cloudflare Captcha Solver — ZibraX".to_string());
     let app_handle = app.clone();
     let src_id = source_id.unwrap_or_else(|| {
         parsed_url.host_str().unwrap_or("unknown").to_string()

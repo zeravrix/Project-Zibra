@@ -31,7 +31,7 @@
         });
         if (chapters && chapters.length > 0) {
           const targetChapter = chapters.find(c => c.id === recentProgress.chapter_id) || chapters[0];
-          openReader(recentManga, targetChapter, recentProgress.page_index || 0);
+          openReader(recentManga, targetChapter, recentProgress.page_index || 0, chapters);
           return;
         }
       } catch (_) {}

@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="Zibrax Logo" width="140" />
+<img src="assets/logo.png" alt="ZibraX Logo" width="140" />
 
-# Zibrax (Project Zibra)
+# ZibraX
 
 **High-Performance Native Manga, Manhwa & Comic Reader for Linux & Windows**
 
 [![Official Website](https://img.shields.io/badge/Website-zeravrix.pages.dev-7C4DFF?style=for-the-badge&logo=googlechrome&logoColor=white)](https://zeravrix.pages.dev)
-[![Release](https://img.shields.io/badge/Release-v2.1.0-00E676?style=for-the-badge)](https://github.com/zeravrix/Project-Zibra/releases)
+[![Release](https://img.shields.io/badge/Release-v2.2.0-00E676?style=for-the-badge)](https://github.com/zeravrix/ZibraX/releases)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-00B0FF?style=for-the-badge&logo=linux&logoColor=white)](#downloads--installation)
 [![Backend](https://img.shields.io/badge/Backend-Rust%20Engine-DEA584?style=for-the-badge&logo=rust&logoColor=black)](https://www.rust-lang.org/)
 [![Frontend](https://img.shields.io/badge/Frontend-Tauri%20v2%20%2B%20Svelte%205-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev/)
@@ -19,7 +19,7 @@
 
 ## Overview
 
-**Zibrax** is an ultra-fast, modern native desktop reader engineered for comic, manga, manhwa, and webtoon enthusiasts. Architected with a multi-threaded **Rust core engine** and a sleek **Tauri v2 + Svelte 5** interface, Zibrax delivers instant startup (`< 100 ms`), minimal memory consumption, smooth hardware acceleration, and zero reliance on external JVM or runtime servers.
+**ZibraX** is an ultra-fast, modern native desktop reader engineered for comic, manga, manhwa, and webtoon enthusiasts. Architected with a multi-threaded **Rust core engine** and a sleek **Tauri v2 + Svelte 5** interface, ZibraX delivers instant startup (`< 100 ms`), minimal memory consumption, smooth hardware acceleration, and zero reliance on external JVM or runtime servers.
 
 The application compiles down to a compact standalone native executable with embedded UI assets, running seamlessly out of the box on Linux and Windows.
 
@@ -30,25 +30,25 @@ The application compiles down to a compact standalone native executable with emb
 <div align="center">
 
 ### Library & History
-<img src="docs/assets/screenshot-library.png" alt="Zibrax Library View" width="95%" />
+<img src="docs/assets/screenshot-library.png" alt="ZibraX Library View" width="95%" />
 
 <br/><br/>
 
 ### Pinned Sources & Global Discovery
-<img src="docs/assets/screenshot-explore.png" alt="Zibrax Explore View" width="48%" />
-<img src="docs/assets/screenshot-catalog.png" alt="Zibrax Catalog View" width="48%" />
+<img src="docs/assets/screenshot-explore.png" alt="ZibraX Explore View" width="48%" />
+<img src="docs/assets/screenshot-catalog.png" alt="ZibraX Catalog View" width="48%" />
 
 <br/><br/>
 
 ### Reading Experience & Real-Time Adjustments
-<img src="docs/assets/screenshot-reader.png" alt="Zibrax Reader View" width="48%" />
-<img src="docs/assets/screenshot-reader-settings.png" alt="Zibrax Reader Settings" width="48%" />
+<img src="docs/assets/screenshot-reader.png" alt="ZibraX Reader View" width="48%" />
+<img src="docs/assets/screenshot-reader-settings.png" alt="ZibraX Reader Settings" width="48%" />
 
 <br/><br/>
 
 ### Feed & Application Preferences
-<img src="docs/assets/screenshot-feed.png" alt="Zibrax Feed View" width="48%" />
-<img src="docs/assets/screenshot-settings.png" alt="Zibrax Settings View" width="48%" />
+<img src="docs/assets/screenshot-feed.png" alt="ZibraX Feed View" width="48%" />
+<img src="docs/assets/screenshot-settings.png" alt="ZibraX Settings View" width="48%" />
 
 </div>
 
@@ -86,7 +86,7 @@ The application compiles down to a compact standalone native executable with emb
 
 ### Linux (Standalone Native Binary)
 
-Download the latest Linux release package from [GitHub Releases](https://github.com/zeravrix/Project-Zibra/releases):
+Download the latest Linux release package from [GitHub Releases](https://github.com/zeravrix/ZibraX/releases):
 
 ```bash
 # Clone or download release archive
@@ -99,7 +99,7 @@ cd zibra-linux-x86_64
 
 ### Windows (Setup & Standalone)
 
-Download the Windows installer (`.exe` / `.msi`) or portable zip from [GitHub Releases](https://github.com/zeravrix/Project-Zibra/releases), extract, and launch `zibra.exe`.
+Download the Windows installer (`.exe` / `.msi`) or portable zip from [GitHub Releases](https://github.com/zeravrix/ZibraX/releases), extract, and launch `zibra.exe`.
 
 ---
 
@@ -113,8 +113,8 @@ Download the Windows installer (`.exe` / `.msi`) or portable zip from [GitHub Re
 ### Build Steps
 ```bash
 # 1. Clone repository
-git clone https://github.com/zeravrix/Project-Zibra.git
-cd Project-Zibra
+git clone https://github.com/zeravrix/ZibraX.git
+cd ZibraX
 
 # 2. Build frontend assets
 npm install
@@ -132,7 +132,7 @@ cargo build --release -p zibra-desktop
 ## Repository Structure
 
 ```text
-Project-Zibra/
+ZibraX/
 ├── Cargo.toml                     # Root workspace manifest
 ├── Cargo.lock                     # Deterministic dependency lockfile
 ├── index.html                     # Frontend entry point

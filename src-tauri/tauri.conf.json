@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "zibra",
-  "version": "2.1.0",
+  "productName": "ZibraX",
+  "version": "2.2.0",
   "identifier": "org.zeravrix.zibra",
   "build": {
     "frontendDist": "../dist",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Zibrax • Native Manga & Manhwa Reader",
+        "title": "ZibraX • Native Manga & Manhwa Reader",
         "url": "index.html",
         "width": 1240,
         "height": 780,

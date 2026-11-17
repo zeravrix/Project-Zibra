@@ -1,12 +1,16 @@
 import { invoke } from '@tauri-apps/api/core';
+import { pushNavHistory, popNavHistory, toChronologicalChapters } from '../utils/readerNav.js';
+
+export { toChronologicalChapters };
 
 export const appState = $state({
   currentScreen: 'history',
-  previousScreen: 'history',
+  historyStack: [],
   railExpanded: false,
   settings: null,
   activeManga: null,
   activeChapter: null,
+  activeChapters: [],
   initialPageIndex: 0,
   selectedSourceId: 'MANGADEX',
   notification: null,
@@ -22,10 +26,9 @@ export function notify(message, duration = 3000) {
 }
 
 export function navigate(screen) {
-  if (appState.currentScreen !== screen) {
-    appState.previousScreen = appState.currentScreen;
-    appState.currentScreen = screen;
-  }
+  const next = pushNavHistory(appState.historyStack, appState.currentScreen, screen);
+  appState.historyStack = next.stack;
+  appState.currentScreen = next.currentScreen;
 }
 
 export function openManga(manga) {
@@ -33,19 +36,18 @@ export function openManga(manga) {
   navigate('details');
 }
 
-export function openReader(manga, chapter, page = 0) {
+export function openReader(manga, chapter, page = 0, chapters = null) {
   appState.activeManga = manga;
   appState.activeChapter = chapter;
+  appState.activeChapters = Array.isArray(chapters) ? chapters : [];
   appState.initialPageIndex = page;
   navigate('reader');
 }
 
 export function goBack() {
-  if (appState.currentScreen === 'reader') {
-    navigate('details');
-  } else if (appState.currentScreen === 'details') {
-    navigate(appState.previousScreen || 'history');
-  }
+  const next = popNavHistory(appState.historyStack, appState.currentScreen, Boolean(appState.activeManga));
+  appState.historyStack = next.stack;
+  appState.currentScreen = next.currentScreen;
 }
 
 export async function loadSettings() {

@@ -25,7 +25,7 @@
         on:click={() => appState.railExpanded = !appState.railExpanded}
         title="Toggle Sidebar"
       >
-        <img src="/logo.png" alt="Zibrax" class="brand-logo-img" />
+        <img src="/logo.png" alt="ZibraX" class="brand-logo-img" />
       </button>
     </div>
 

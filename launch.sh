@@ -15,6 +15,6 @@ elif [ -x "$DIR/zibra-desktop" ]; then
 elif [ -x "$DIR/target/release/zibra-desktop" ]; then
     exec "$DIR/target/release/zibra-desktop" "$@"
 else
-    echo "Zibrax binary not found. Expected in bin/ or target/release/." >&2
+    echo "ZibraX binary not found. Expected in bin/ or target/release/." >&2
     exit 1
 fi
