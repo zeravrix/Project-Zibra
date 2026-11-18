@@ -7,7 +7,8 @@
 **High-Performance Native Manga, Manhwa & Comic Reader for Linux & Windows**
 
 [![Official Website](https://img.shields.io/badge/Website-zeravrix.pages.dev-7C4DFF?style=for-the-badge&logo=googlechrome&logoColor=white)](https://zeravrix.pages.dev)
-[![Release](https://img.shields.io/badge/Release-v2.2.1-00E676?style=for-the-badge)](https://github.com/zeravrix/ZibraX/releases)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-ZERAVRIX-0078D7?style=for-the-badge&logo=windows&logoColor=white)](https://apps.microsoft.com/search?query=ZERAVRIX)
+[![Release](https://img.shields.io/badge/Release-v2.2.2-00E676?style=for-the-badge)](https://github.com/zeravrix/ZibraX/releases)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-00B0FF?style=for-the-badge&logo=linux&logoColor=white)](#downloads--installation)
 [![Backend](https://img.shields.io/badge/Backend-Rust%20Engine-DEA584?style=for-the-badge&logo=rust&logoColor=black)](https://www.rust-lang.org/)
 [![Frontend](https://img.shields.io/badge/Frontend-Tauri%20v2%20%2B%20Svelte%205-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev/)
@@ -62,8 +63,8 @@ The application compiles down to a compact standalone native executable with emb
   - Automatic bidirectional archive fallback (Latest ↔ Popular) to ensure maximum title availability.
   - Built-in **NSFW Filter** (configurable in Settings) to safeguard catalog views and search results.
 
-- **In-App Cloudflare Verification**:
-  - Integrated lightweight browser window enabling users to pass Cloudflare Turnstile and DDoS-GUARD challenges.
+- **In-App Cloudflare Verification (Z Browser)**:
+  - Integrated **Z Browser** webview window enabling users to pass Cloudflare Turnstile and DDoS-GUARD challenges.
   - Automatic session cookie sync back to the native HTTP client for continuous reading without external browser workarounds.
 
 - **Fast, Modern UI**:
@@ -97,9 +98,10 @@ cd zibra-linux-x86_64
 ./zibra-desktop
 ```
 
-### Windows (Setup & Standalone)
+### Windows (Setup, Standalone & Microsoft Store)
 
-Download the Windows installer (`.exe` / `.msi`) or portable zip from [GitHub Releases](https://github.com/zeravrix/ZibraX/releases), extract, and launch `zibra.exe`.
+- **Microsoft Store**: Install the packaged Store Edition from the [Microsoft Store](https://apps.microsoft.com/search?query=ZERAVRIX).
+- **Direct Download**: Download the Windows installer (`.exe`) or portable zip from [GitHub Releases](https://github.com/zeravrix/ZibraX/releases), extract, and launch `zibra.exe`.
 
 ---
 

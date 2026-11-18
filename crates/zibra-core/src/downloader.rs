@@ -35,9 +35,14 @@ impl DesktopDownloader {
     pub fn new(app_dir: &Path, max_concurrent: usize) -> Self {
         let downloads_dir = app_dir.join("downloads");
         let _ = fs::create_dir_all(&downloads_dir);
+        #[cfg(target_os = "linux")]
+        let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+        #[cfg(not(target_os = "linux"))]
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(45))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .user_agent(ua)
             .build()
             .unwrap_or_default();
 

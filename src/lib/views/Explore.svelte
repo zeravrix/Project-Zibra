@@ -136,15 +136,15 @@
       action: () => openSourceBrowser(contextSource),
     },
     {
-      label: "Solve Cloudflare (Light Browser)",
+      label: "Solve Cloudflare (Z Browser)",
       icon: ShieldAlert,
       action: () => {
         invoke('open_cloudflare_solver', {
           url: contextSource.base_url,
-          title: `${contextSource.name} — Cloudflare Verification`,
+          title: `${contextSource.name} — Z Browser Verification`,
           sourceId: contextSource.id,
         });
-        notify(`Opening lightweight solver for ${contextSource.name}...`);
+        notify(`Opening Z Browser for ${contextSource.name}...`);
       },
     },
     { divider: true },
@@ -310,10 +310,10 @@
     try {
       await invoke('open_cloudflare_solver', {
         url: selectedSource.base_url,
-        title: `${selectedSource.name} — Cloudflare Verification`,
+        title: `${selectedSource.name} — Z Browser Verification`,
         sourceId: selectedSource.id,
       });
-      notify(`Opening lightweight solver for ${selectedSource.name}...`);
+      notify(`Opening Z Browser for ${selectedSource.name}...`);
     } catch (e) {
       notify('Solver error: ' + e);
     }
@@ -658,14 +658,14 @@
           <div class="cf-action-group">
             <button class="cf-primary-btn" on:click={handleSolveCloudflare}>
               <ShieldAlert size={18} />
-              <span>Pass Cloudflare (Light Browser)</span>
+              <span>Pass Cloudflare (Z Browser)</span>
             </button>
             <button class="cf-retry-btn" on:click={() => loadMangas(1, false)}>
               <RefreshCw size={16} />
               <span>Retry</span>
             </button>
           </div>
-          <span class="cf-note">Opens a lightweight browser window. Cookies sync automatically when solved.</span>
+          <span class="cf-note">Opens Z Browser window. Cookies sync automatically when solved.</span>
         </div>
 
       {:else if mangaList.length === 0}

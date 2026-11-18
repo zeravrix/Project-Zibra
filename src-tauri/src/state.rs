@@ -34,7 +34,7 @@ impl AppState {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(25))
             .cookie_provider(cookie_jar.clone())
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .user_agent(crate::commands::DEFAULT_USER_AGENT)
             .build()
             .unwrap_or_default();
 
@@ -52,12 +52,7 @@ impl AppState {
                 });
 
             if let Some(url) = target_url {
-                for part in cookie_str.split(';') {
-                    let trimmed = part.trim();
-                    if !trimmed.is_empty() {
-                        cookie_jar.add_cookie_str(trimmed, &url);
-                    }
-                }
+                crate::commands::inject_cookie_into_jar(&cookie_jar, cookie_str, &url);
             }
         }
 

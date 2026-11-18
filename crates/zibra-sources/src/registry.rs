@@ -32,16 +32,18 @@ impl Default for LiveSourceRegistry {
 
 impl LiveSourceRegistry {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
+        let b = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .connect_timeout(Duration::from_secs(6))
             .tcp_nodelay(true)
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(10)
-            .cookie_store(true)
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-            .build()
-            .unwrap_or_default();
+            .cookie_store(true);
+        #[cfg(target_os = "linux")]
+        let b = b.user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+        #[cfg(not(target_os = "linux"))]
+        let b = b.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+        let client = b.build().unwrap_or_default();
         Self::new_with_client(client)
     }
 

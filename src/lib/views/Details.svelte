@@ -67,10 +67,10 @@
       const targetUrl = manga.url || 'https://google.com';
       await invoke('open_cloudflare_solver', {
         url: targetUrl,
-        title: `${manga.title} — Cloudflare Verification`,
+        title: `${manga.title} — Z Browser Verification`,
         sourceId: manga.source_id,
       });
-      notify('Opening Cloudflare solver in webview...');
+      notify('Opening Z Browser for verification...');
     } catch (e) {
       notify('Solver error: ' + e);
     }
@@ -79,12 +79,17 @@
   async function handleSaveCookies() {
     if (!manga) return;
     try {
-      await invoke('save_source_cookies', {
+      const saved = await invoke('save_source_cookies', {
         sourceId: manga.source_id,
         cookie: cookieInput,
         baseUrl: manga.url,
       });
-      notify('Saved custom cookies for source');
+      if (saved) {
+        cookieInput = saved;
+        notify('Cookies synced and saved for source');
+      } else {
+        notify('Saved custom cookies for source');
+      }
       showCookieModal = false;
       loadDetails();
     } catch (e) {
@@ -270,11 +275,11 @@
           <ShieldAlert size={28} class="empty-cf-icon" />
           <div class="empty-cf-info">
             <h3 class="empty-cf-title">No chapters available or access restricted</h3>
-            <p class="empty-cf-desc">If this source is protected by Cloudflare Turnstile, click below to open the light browser and pass the check.</p>
+            <p class="empty-cf-desc">If this source is protected by Cloudflare Turnstile, click below to open Z Browser and pass the check.</p>
           </div>
           <button class="empty-cf-action" on:click={handleSolveCloudflare}>
             <ShieldAlert size={16} />
-            Pass Cloudflare (Light Browser)
+            Pass Cloudflare (Z Browser)
           </button>
         </div>
       {:else}
@@ -312,14 +317,14 @@
         <div class="modal-header">
           <div class="modal-title-group">
             <ShieldAlert size={20} class="modal-icon" />
-            <h3>Cloudflare Solver: {manga?.title}</h3>
+            <h3>Z Browser Solver: {manga?.title}</h3>
           </div>
           <button class="close-icon-btn" on:click={() => (showCookieModal = false)}>
             <X size={18} />
           </button>
         </div>
         <p class="modal-desc">
-          An in-app solver window has opened. Complete the Cloudflare verification challenge and click <em>"Sync & Return"</em>.
+          Z Browser has been launched. Complete any Cloudflare verification challenge and click <em>"Sync & Close"</em>.
         </p>
         <div class="manual-cookie-section">
           <label for="det-cookie-box" class="cookie-label">Or paste cookies manually (cf_clearance):</label>

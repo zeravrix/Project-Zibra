@@ -456,7 +456,7 @@
             <img src="/logo.png" alt="ZibraX" class="settings-logo-img" />
             <div>
               <h2 class="card-title">ZibraX Desktop</h2>
-              <p class="card-subtitle">v2.2.1 • Rust Engine & Svelte 5</p>
+              <p class="card-subtitle">v2.2.2 • Rust Engine & Svelte 5</p>
             </div>
           </div>
           <button class="about-action-btn" on:click={() => navigate('about')}>

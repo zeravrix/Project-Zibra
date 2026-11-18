@@ -355,10 +355,10 @@
       const targetUrl = activeChapter?.url || nextChapterObj?.url || manga.url || 'https://google.com';
       await invoke('open_cloudflare_solver', {
         url: targetUrl,
-        title: `${manga.title} — Cloudflare Verification`,
+        title: `${manga.title} — Z Browser Verification`,
         sourceId: manga.source_id,
       });
-      notify('Opening Cloudflare solver in light browser...');
+      notify('Opening Z Browser for verification...');
     } catch (e) {
       notify('Solver error: ' + e);
     }

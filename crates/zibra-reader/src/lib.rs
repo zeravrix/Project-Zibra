@@ -15,6 +15,10 @@ pub const MAX_SAFE_IMAGE_BYTES: u64 = 256 * 1024 * 1024; // 256 MB guard against
 pub const MAX_SAFE_IMAGE_WIDTH: usize = 16384;
 pub const MAX_SAFE_IMAGE_HEIGHT: usize = 65536;
 
+#[cfg(target_os = "linux")]
+const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+#[cfg(not(target_os = "linux"))]
 const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 struct InFlightGuard {

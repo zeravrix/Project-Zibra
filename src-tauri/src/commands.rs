@@ -322,20 +322,109 @@ pub async fn cancel_download(_state: State<'_, AppState>, _chapter_id: String) -
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+pub const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+#[cfg(not(target_os = "linux"))]
+pub const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+pub fn extract_cookies_for_domain(target: &str) -> Option<String> {
+    let parsed_host = if let Ok(u) = target.parse::<url::Url>() {
+        u.host_str().unwrap_or(target).to_lowercase()
+    } else {
+        target.split('/').next().unwrap_or(target).to_lowercase()
+    };
+    let clean_domain = parsed_host.trim_start_matches("www.").trim_start_matches("api.");
+    if clean_domain.is_empty() {
+        return None;
+    }
+
+    let home = dirs::home_dir()?;
+    let candidate_paths = [
+        home.join(".local/share/org.zeravrix.zibra/cookies"),
+        home.join(".local/share/com.zeravrix.zibra/cookies"),
+        home.join(".local/share/zibrax/cookies"),
+        home.join(".local/share/zibra/cookies"),
+    ];
+
+    let mut found_cookies = std::collections::HashMap::new();
+
+    for path in &candidate_paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || (trimmed.starts_with('#') && !trimmed.starts_with("#HttpOnly_")) {
+                    continue;
+                }
+                let effective_line = if let Some(stripped) = trimmed.strip_prefix("#HttpOnly_") {
+                    stripped
+                } else {
+                    trimmed
+                };
+                let parts: Vec<&str> = effective_line.split('\t').collect();
+                if parts.len() >= 7 {
+                    let cookie_domain = parts[0].trim().trim_start_matches('.').to_lowercase();
+                    if cookie_domain == clean_domain
+                        || cookie_domain.ends_with(&format!(".{}", clean_domain))
+                        || clean_domain.ends_with(&format!(".{}", cookie_domain))
+                    {
+                        let name = parts[5].trim();
+                        let value = parts[6].trim();
+                        if !name.is_empty() && !value.is_empty() {
+                            found_cookies.insert(name.to_string(), value.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if found_cookies.is_empty() {
+        None
+    } else {
+        let cookie_str = found_cookies
+            .into_iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("; ");
+        Some(cookie_str)
+    }
+}
+
+pub fn inject_cookie_into_jar(jar: &reqwest::cookie::Jar, cookie: &str, target_url: &url::Url) {
+    let host = target_url.host_str().unwrap_or_default();
+    let parent_domain = if let Some(stripped) = host.strip_prefix("www.") {
+        format!(".{}", stripped)
+    } else if let Some(stripped) = host.strip_prefix("api.") {
+        format!(".{}", stripped)
+    } else {
+        format!(".{}", host)
+    };
+
+    for part in cookie.split(';') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.to_lowercase().contains("path=") {
+            jar.add_cookie_str(trimmed, target_url);
+        } else {
+            let with_domain_and_path = format!("{}; Path=/; Domain={}", trimmed, parent_domain);
+            jar.add_cookie_str(&with_domain_and_path, target_url);
+            let with_path_only = format!("{}; Path=/", trimmed);
+            jar.add_cookie_str(&with_path_only, target_url);
+        }
+    }
+}
+
 pub fn save_source_cookies_inner(
     state: &AppState,
     source_id: &str,
     cookie: &str,
     base_url: Option<&str>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let mut settings = state.settings_store.load();
-    let trimmed_cookie = cookie.trim();
-    if trimmed_cookie.is_empty() {
-        settings.custom_source_cookies.remove(source_id);
-    } else {
-        settings.custom_source_cookies.insert(source_id.to_string(), trimmed_cookie.to_string());
-    }
-    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+    let mut trimmed_cookie = cookie.trim().to_string();
 
     let target_url = base_url
         .and_then(|u| u.parse::<url::Url>().ok())
@@ -343,15 +432,27 @@ pub fn save_source_cookies_inner(
             state.registry.get(source_id).and_then(|s| s.base_url().parse::<url::Url>().ok())
         });
 
-    if let Some(parsed) = target_url {
-        for part in trimmed_cookie.split(';') {
-            let item = part.trim();
-            if !item.is_empty() {
-                state.cookie_jar.add_cookie_str(item, &parsed);
-            }
+    // If cookie is empty, automatically attempt extraction from webview cookie storage!
+    if trimmed_cookie.is_empty() {
+        let lookup_domain = target_url.as_ref()
+            .and_then(|u| u.host_str())
+            .unwrap_or(source_id);
+        if let Some(extracted) = extract_cookies_for_domain(lookup_domain) {
+            trimmed_cookie = extracted;
         }
     }
-    Ok(())
+
+    if trimmed_cookie.is_empty() {
+        return Ok(String::new());
+    }
+
+    settings.custom_source_cookies.insert(source_id.to_string(), trimmed_cookie.clone());
+    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+
+    if let Some(parsed) = target_url {
+        inject_cookie_into_jar(&state.cookie_jar, &trimmed_cookie, &parsed);
+    }
+    Ok(trimmed_cookie)
 }
 
 #[tauri::command]
@@ -371,7 +472,7 @@ pub async fn open_cloudflare_solver(
         return Ok(());
     }
 
-    let win_title = title.unwrap_or_else(|| "Cloudflare Captcha Solver — ZibraX".to_string());
+    let win_title = title.unwrap_or_else(|| "Z Browser — Cloudflare Verification".to_string());
     let app_handle = app.clone();
     let src_id = source_id.unwrap_or_else(|| {
         parsed_url.host_str().unwrap_or("unknown").to_string()
@@ -380,27 +481,35 @@ pub async fn open_cloudflare_solver(
 
     let init_script = r#"
         (function() {
+            // Anti-bot detection shims to avoid infinite Turnstile reload loop
+            try {
+                if (!window.chrome) {
+                    window.chrome = { runtime: {} };
+                }
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            } catch (e) {}
+
             function initZibraPill() {
                 if (document.getElementById('zibra-cf-pill')) return;
                 
                 const pill = document.createElement('div');
                 pill.id = 'zibra-cf-pill';
-                pill.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(35,33,44,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f4f3f7;border:1px solid rgba(255,255,255,0.15);border-radius:9999px;display:flex;align-items:center;gap:10px;padding:8px 16px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;font-size:12px;';
+                pill.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(25,23,34,0.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f4f3f7;border:1px solid rgba(255,255,255,0.18);border-radius:9999px;display:flex;align-items:center;gap:10px;padding:8px 16px;box-shadow:0 12px 32px rgba(0,0,0,0.7);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;font-size:12px;';
 
                 const label = document.createElement('span');
-                label.innerText = 'Cloudflare Verification';
-                label.style.cssText = 'font-weight:600;color:#c4b5fd;';
+                label.innerText = 'Z Browser';
+                label.style.cssText = 'font-weight:700;color:#c4b5fd;letter-spacing:0.3px;';
 
                 const reloadBtn = document.createElement('button');
                 reloadBtn.innerText = '↻';
                 reloadBtn.title = 'Reload page';
-                reloadBtn.style.cssText = 'background:rgba(255,255,255,0.08);color:#f4f3f7;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;';
+                reloadBtn.style.cssText = 'background:rgba(255,255,255,0.1);color:#f4f3f7;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;';
                 reloadBtn.onclick = () => window.location.reload();
 
                 const syncBtn = document.createElement('button');
                 syncBtn.id = 'zibra-sync-btn';
-                syncBtn.innerText = 'Done & Sync';
-                syncBtn.style.cssText = 'background:#4f46e5;color:#ffffff;border:none;border-radius:9999px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s;';
+                syncBtn.innerText = 'Sync & Close';
+                syncBtn.style.cssText = 'background:#6366f1;color:#ffffff;border:none;border-radius:9999px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s;';
 
                 let synced = false;
                 function doSync(auto) {
@@ -409,10 +518,9 @@ pub async fn open_cloudflare_solver(
                     syncBtn.innerText = auto ? '✓ Solved!' : 'Syncing...';
                     syncBtn.style.background = '#10b981';
                     const c = document.cookie || '';
-                    const ua = navigator.userAgent || '';
                     setTimeout(() => {
-                        window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c) + '&ua=' + encodeURIComponent(ua);
-                    }, 400);
+                        window.location.href = 'https://zibra.local/sync-cf?c=' + encodeURIComponent(c);
+                    }, 300);
                 }
 
                 syncBtn.onclick = () => doSync(false);
@@ -426,18 +534,6 @@ pub async fn open_cloudflare_solver(
                 } else if (document.documentElement) {
                     document.documentElement.appendChild(pill);
                 }
-
-                const checkInterval = setInterval(() => {
-                    if (synced) {
-                        clearInterval(checkInterval);
-                        return;
-                    }
-                    const c = document.cookie || '';
-                    if (c.includes('cf_clearance')) {
-                        clearInterval(checkInterval);
-                        doSync(true);
-                    }
-                }, 600);
             }
 
             if (document.readyState === 'loading') {
@@ -459,7 +555,7 @@ pub async fn open_cloudflare_solver(
     .inner_size(520.0, 700.0)
     .center()
     .resizable(true)
-    .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+    .user_agent(DEFAULT_USER_AGENT)
     .initialization_script(init_script)
     .on_navigation(move |nav_url| {
         if nav_url.host_str() == Some("zibra.local") && nav_url.path() == "/sync-cf" {
@@ -471,14 +567,14 @@ pub async fn open_cloudflare_solver(
 
             tauri::async_runtime::spawn(async move {
                 let state = app_h.state::<AppState>();
-                let _ = save_source_cookies_inner(&state, &s_id, &cookie_str, Some(&b_url));
+                let saved = save_source_cookies_inner(&state, &s_id, &cookie_str, Some(&b_url)).unwrap_or_default();
                 if let Some(win) = app_h.get_webview_window("cloudflare-solver") {
                     let _ = win.close();
                 }
                 use tauri::Emitter;
                 let _ = app_h.emit("cloudflare-solved", serde_json::json!({
                     "source_id": s_id,
-                    "cookies": cookie_str,
+                    "cookies": saved,
                 }));
             });
             return false;
@@ -497,7 +593,7 @@ pub async fn save_source_cookies(
     source_id: String,
     cookie: String,
     base_url: Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     save_source_cookies_inner(&state, &source_id, &cookie, base_url.as_deref())
 }
 
@@ -506,7 +602,10 @@ pub async fn clear_source_cookies(
     state: State<'_, AppState>,
     source_id: String,
 ) -> Result<(), String> {
-    save_source_cookies_inner(&state, &source_id, "", None)
+    let mut settings = state.settings_store.load();
+    settings.custom_source_cookies.remove(&source_id);
+    state.settings_store.save(&settings).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -574,13 +673,28 @@ mod tests {
         assert!(header_str.contains("__cf_bm=mock_bm_67890"));
         assert!(header_str.contains("csrftoken=abc"));
 
-        // Clear cookies
-        let clear_res = save_source_cookies_inner(&state, "MANGADEX", "", None);
-        assert!(clear_res.is_ok());
+        // Clear cookies explicitly via settings
+        let mut s = state.settings_store.load();
+        s.custom_source_cookies.remove("MANGADEX");
+        let _ = state.settings_store.save(&s);
         let after_clear = settings_store.load();
         assert!(!after_clear.custom_source_cookies.contains_key("MANGADEX"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_inject_cookie_into_jar_subdomain_matching() {
+        let cookie_jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        let target_url = "https://api.mangadex.org".parse::<url::Url>().unwrap();
+        inject_cookie_into_jar(&cookie_jar, "cf_clearance=test_clearance_abc123", &target_url);
+
+        use reqwest::cookie::CookieStore;
+        // Verify both root/subdomains and child paths get the cookie
+        let check_url = "https://api.mangadex.org/chapter/123".parse::<url::Url>().unwrap();
+        let header = cookie_jar.cookies(&check_url).unwrap();
+        let header_str = header.to_str().unwrap();
+        assert!(header_str.contains("cf_clearance=test_clearance_abc123"));
     }
 }
 

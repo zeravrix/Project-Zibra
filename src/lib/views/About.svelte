@@ -25,6 +25,13 @@
       desc: 'Native Rust backend & Svelte 5 desktop engine, GPL-3.0 open source code',
       icon: Code2,
       badge: 'GitHub'
+    },
+    {
+      title: 'Microsoft Store',
+      url: 'https://apps.microsoft.com/search?query=ZERAVRIX',
+      desc: 'Official ZERAVRIX Windows Store package edition',
+      icon: Globe,
+      badge: 'Store'
     }
   ];
 </script>
@@ -47,7 +54,7 @@
       </div>
       <h1 class="app-title">ZibraX</h1>
       <div class="version-badges">
-        <span class="v-pill">v2.2.1 Desktop</span>
+        <span class="v-pill">v2.2.2 Desktop</span>
         <span class="v-pill rust">Rust Engine & Svelte 5</span>
         <span class="v-pill">Zero JVM</span>
       </div>
@@ -96,7 +103,7 @@
       <div class="spec-item">
         <Heart size={16} class="spec-icon" />
         <span class="spec-label">Project Family</span>
-        <span class="spec-val">ZERAVRIX Ecosystem → ZibraX 2.2.1 Edition</span>
+        <span class="spec-val">ZERAVRIX Ecosystem → ZibraX 2.2.2 Edition</span>
       </div>
     </div>
   </div>
