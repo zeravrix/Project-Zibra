@@ -20,24 +20,24 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev
+          sudo apt-get install -y pkg-config libssl-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build release binary
-        run: cargo build --release --workspace
+        run: cargo build --release -p zibra-desktop
       - name: Package Linux archive
         run: |
-          mkdir -p dist/zibra-linux-x86_64
-          cp target/release/zibra dist/zibra-linux-x86_64/
-          cp -r assets dist/zibra-linux-x86_64/
-          cp distribution/linux/zibra.desktop dist/zibra-linux-x86_64/
-          cp LICENSE README.md dist/zibra-linux-x86_64/
-          tar -czvf ZIBRA-Linux-x86_64.tar.gz -C dist zibra-linux-x86_64
+          mkdir -p dist-linux/zibra-linux-x86_64
+          cp target/release/zibra-desktop dist-linux/zibra-linux-x86_64/
+          if [ -d assets ]; then cp -r assets dist-linux/zibra-linux-x86_64/; fi
+          cp distribution/linux/zibra.desktop dist-linux/zibra-linux-x86_64/
+          cp LICENSE README.md dist-linux/zibra-linux-x86_64/
+          tar -czvf ZibraX-v2.2.2-Linux-x86_64.tar.gz -C dist-linux zibra-linux-x86_64
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZIBRA-Linux-x86_64
-          path: ZIBRA-Linux-x86_64.tar.gz
+          name: ZibraX-Linux-x86_64
+          path: ZibraX-v2.2.2-Linux-x86_64.tar.gz
 
   build-windows:
     name: Build Windows (x64)
@@ -46,18 +46,43 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
       - name: Build release binary
-        run: cargo build --release --workspace
-      - name: Package Windows Portable ZIP
+        run: cargo build --release -p zibra-desktop
+      - name: Package Windows Artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist/ZIBRA-Windows-x64
-          Copy-Item target/release/zibra.exe dist/ZIBRA-Windows-x64/
-          Copy-Item -Recurse assets dist/ZIBRA-Windows-x64/
-          Copy-Item LICENSE, README.md dist/ZIBRA-Windows-x64/
-          Compress-Archive -Path dist/ZIBRA-Windows-x64/* -DestinationPath ZIBRA-Windows-x64-Portable.zip
-      - name: Upload Windows Artifact
+          # 1. Portable ZIP
+          New-Item -ItemType Directory -Force -Path dist-win/ZibraX-v2.2.2-PC-Portable
+          Copy-Item target/release/zibra-desktop.exe dist-win/ZibraX-v2.2.2-PC-Portable/zibra-desktop.exe
+          Copy-Item target/release/zibra-desktop.exe dist-win/ZibraX-v2.2.2-PC-Portable/ZERAVRIX.exe
+          if (Test-Path assets) { Copy-Item -Recurse assets dist-win/ZibraX-v2.2.2-PC-Portable/ }
+          Copy-Item LICENSE, README.md dist-win/ZibraX-v2.2.2-PC-Portable/
+          Compress-Archive -Path dist-win/ZibraX-v2.2.2-PC-Portable/* -DestinationPath ZibraX-v2.2.2-PC-Portable.zip -Force
+
+          # 2. Inno Setup installer
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" distribution/windows/ZibraX.iss
+
+          # 3. Store MSIX & MSIXUPLOAD layout
+          New-Item -ItemType Directory -Force -Path msix-layout/Assets
+          Copy-Item target/release/zibra-desktop.exe msix-layout/ZERAVRIX.exe
+          Copy-Item distribution/windows/store/AppxManifest.xml msix-layout/AppxManifest.xml
+          Copy-Item distribution/windows/store/Assets/* msix-layout/Assets/
+
+          $makeappx = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          Write-Host "Using MakeAppx: $makeappx"
+          & $makeappx pack /d msix-layout /p ZERAVRIX-Store-2.2.2-x64.msix /nv
+
+          Compress-Archive -Path ZERAVRIX-Store-2.2.2-x64.msix -DestinationPath ZERAVRIX-Store-2.2.2-x64.msixupload -Force
+
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ZIBRA-Windows-x64-Portable
-          path: ZIBRA-Windows-x64-Portable.zip
+          name: ZibraX-Windows-Release
+          path: |
+            target/release/zibra-desktop.exe
+            ZibraX-v2.2.2-PC-Portable.zip
+            ZibraX-v2.2.2-PC-Setup.exe
+            ZERAVRIX-Store-2.2.2-x64.msix
+            ZERAVRIX-Store-2.2.2-x64.msixupload
